@@ -110,6 +110,7 @@ export interface UserSettings {
   notificationPermission?: 'default' | 'granted' | 'denied';
   onboardingCompleted?: boolean;
   onboardingGoals?: string[];
+  memoryEnabled?: boolean;
 }
 
 export interface UserProfile {

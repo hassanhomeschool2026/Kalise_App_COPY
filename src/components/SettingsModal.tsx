@@ -49,6 +49,7 @@ export const SettingsModal: React.FC<Props> = ({
   const [name, setName] = useState(settings.userName || 'Friend');
   const [dailyEnabled, setDailyEnabled] = useState(settings.dailyCheckInEnabled);
   const [dailyTime, setDailyTime] = useState(settings.dailyCheckInTime || '20:30');
+  const [memoryEnabled, setMemoryEnabled] = useState(settings.memoryEnabled ?? true);
   const [savedNotice, setSavedNotice] = useState(false);
   const [notifStatus, setNotifStatus] = useState<string>('');
 
@@ -60,6 +61,7 @@ export const SettingsModal: React.FC<Props> = ({
       userName: name.trim() || 'Friend',
       dailyCheckInEnabled: dailyEnabled,
       dailyCheckInTime: dailyTime,
+      memoryEnabled,
       theme,
     };
     onUpdateSettings(updated);
@@ -251,6 +253,30 @@ export const SettingsModal: React.FC<Props> = ({
                 <Monitor className="w-4 h-4" />
                 <span className="text-[11px]">System</span>
               </button>
+            </div>
+          </div>
+
+          {/* SECTION: KALISE MEMORY TOGGLE */}
+          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-100">Kalise Persistent Memory</p>
+                  <p className="text-[11px] text-slate-400">Remember context &amp; ongoing themes across sessions</p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={memoryEnabled}
+                  onChange={(e) => setMemoryEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+              </label>
             </div>
           </div>
 

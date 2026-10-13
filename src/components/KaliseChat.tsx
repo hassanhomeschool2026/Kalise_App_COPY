@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock } from 'lucide-react';
+import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall } from 'lucide-react';
 import { ChatMessage, MoodEntry, UserSettings } from '../types';
 
 interface Props {
@@ -36,6 +36,9 @@ export const KaliseChat: React.FC<Props> = ({
   onRetry,
 }) => {
   const [inputText, setInputText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const baseTextRef = useRef('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isFreeLimitReached = !settings.isPremium && settings.freeMessagesUsed >= 3;
@@ -44,8 +47,12 @@ export const KaliseChat: React.FC<Props> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
     const text = inputText.trim();
     if (!text || isLoading) return;
 
@@ -55,7 +62,76 @@ export const KaliseChat: React.FC<Props> = ({
     }
 
     setInputText('');
+    baseTextRef.current = '';
     await onSendMessage(text);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const toggleSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. You can type your message directly.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    baseTextRef.current = inputText ? inputText.trim() + ' ' : '';
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      const currentSpoken = finalTranscript || interimTranscript;
+      if (currentSpoken) {
+        setInputText(baseTextRef.current + currentSpoken);
+        if (finalTranscript) {
+          baseTextRef.current = baseTextRef.current + finalTranscript + ' ';
+        }
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+    }
   };
 
   const handlePickStarter = async (starter: string) => {
@@ -146,19 +222,59 @@ export const KaliseChat: React.FC<Props> = ({
 
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
+          const lowerContent = msg.content.toLowerCase();
+          const hasResources = !isUser && (
+            lowerContent.includes('211') ||
+            lowerContent.includes('feeding america') ||
+            lowerContent.includes('findhelp') ||
+            lowerContent.includes('food bank') ||
+            lowerContent.includes('ebt')
+          );
+
           return (
             <div
               key={msg.id}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in fade-in duration-200`}
             >
               <div
-                className={`max-w-[86%] rounded-3xl p-4 text-xs md:text-sm leading-relaxed ${
+                className={`max-w-[88%] rounded-3xl p-4 text-xs md:text-sm leading-relaxed ${
                   isUser
                     ? 'bg-teal-500 text-slate-950 font-medium rounded-tr-xs shadow-md'
                     : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-xs shadow-sm'
                 }`}
               >
                 <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                {/* Interactive Resource Quick Actions Card */}
+                {hasResources && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap gap-2">
+                    <a
+                      href="https://www.findhelp.org"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 text-xs font-medium border border-teal-500/30 transition cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open Findhelp.org</span>
+                    </a>
+                    <a
+                      href="https://www.feedingamerica.org/find-your-local-foodbank"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-xs font-medium border border-indigo-500/30 transition cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Feeding America Food Banks</span>
+                    </a>
+                    <a
+                      href="tel:211"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition cursor-pointer"
+                    >
+                      <PhoneCall className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Call 211 Support</span>
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Crisis safeguard trigger if response flagged crisis */}
@@ -253,21 +369,39 @@ export const KaliseChat: React.FC<Props> = ({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="relative mt-2">
-          <input
-            type="text"
+          <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Talk through whatever is happening right now..."
+            onKeyDown={handleKeyDown}
+            placeholder={isListening ? "Listening... Speak now..." : "Talk through whatever is happening right now..."}
             disabled={isLoading}
-            className="w-full pl-4 pr-12 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-teal-500/60 shadow-inner"
+            rows={2}
+            className={`w-full pl-4 pr-24 py-3 rounded-2xl bg-slate-900 border text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none shadow-inner resize-none transition ${
+              isListening ? 'border-rose-500 ring-2 ring-rose-500/20 animate-pulse' : 'border-slate-800 focus:border-teal-500/60'
+            }`}
           />
-          <button
-            type="submit"
-            disabled={!inputText.trim() || isLoading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 disabled:opacity-40 transition cursor-pointer shadow-sm"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+          <div className="absolute right-2.5 bottom-3.5 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleSpeechRecognition}
+              className={`p-2 rounded-xl transition cursor-pointer shadow-sm ${
+                isListening
+                  ? 'bg-rose-500 text-slate-950 animate-bounce'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title={isListening ? "Stop listening" : "Speech to text dictation"}
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
+              type="submit"
+              disabled={!inputText.trim() || isLoading}
+              className="p-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 disabled:opacity-40 transition cursor-pointer shadow-sm"
+              title="Send message"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </form>
       )}
     </div>

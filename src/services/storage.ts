@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   freeMessagesUsed: 0,
   medicationRemindersEnabled: false,
   notificationPermission: 'default',
+  memoryEnabled: true,
 };
 
 const SEED_MEDICATIONS: Medication[] = [

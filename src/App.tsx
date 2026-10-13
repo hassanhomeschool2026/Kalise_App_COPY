@@ -543,6 +543,7 @@ function KaliseMainApp() {
             moods: storageService.getMoods(userId),
             journals: storageService.getJournalEntries(userId).slice(0, 5),
             medications: storageService.getMedications(userId),
+            memoryEnabled: settings.memoryEnabled ?? true,
           }),
           signal: controller.signal,
         });
