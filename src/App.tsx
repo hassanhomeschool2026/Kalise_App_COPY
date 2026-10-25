@@ -682,7 +682,7 @@ function KaliseMainApp() {
         settings={settings}
       />
 
-      <main className="flex-1 w-full max-w-lg mx-auto px-4 pt-2">
+      <main className={`flex-1 w-full mx-auto px-4 pt-2 ${activeTab === 'kalise' ? 'max-w-3xl' : 'max-w-lg'}`}>
         {activeTab === 'home' && (
           <HomeDashboard
             settings={settings}

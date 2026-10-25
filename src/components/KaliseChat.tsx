@@ -73,6 +73,49 @@ export const KaliseChat: React.FC<Props> = ({
     }
   };
 
+  const formatSpokenText = (raw: string) => {
+    let cleaned = raw
+      .replace(/\b(period|full stop)\b/gi, '.')
+      .replace(/\bquestion mark\b/gi, '?')
+      .replace(/\bcomma\b/gi, ',')
+      .replace(/\bexclamation (point|mark)\b/gi, '!')
+      .replace(/\bnew line\b/gi, '\n');
+
+    // Smart clause breaking on venting transitions
+    cleaned = cleaned.replace(/\b(anyway|honestly|seriously|basically|look|well)\s+/gi, '. $1 ');
+
+    // Smart auto-punctuation for continuous venting (inserting commas before natural clause conjunctions if missing)
+    cleaned = cleaned.replace(/(\b\w{3,}\b)\s+(and|but|so|because|yet|then|although|though|while)\s+/gi, '$1, $2 ');
+
+    // Automatic period insertion for long continuous strings without punctuation (every ~12 words)
+    const sentences = cleaned.split(/(?<=[.?!])\s+/);
+    cleaned = sentences.map(sentence => {
+      const words = sentence.split(/\s+/);
+      if (words.length > 12 && !/[.?!]$/.test(sentence)) {
+        words.splice(10, 0, '.');
+        return words.join(' ');
+      }
+      return sentence;
+    }).join(' ');
+
+    // Smart question mark formatting if starts with interrogative word
+    if (/^(who|what|where|when|why|how|is|are|can|do|does|did|will|would|should|could)\b/i.test(cleaned.trim()) && !/[.?!]$/.test(cleaned.trim())) {
+      cleaned = cleaned.trim() + '?';
+    } else if (!/[.?!]$/.test(cleaned.trim()) && cleaned.trim().length > 0) {
+      cleaned = cleaned.trim() + '.';
+    }
+
+    // Clean up double punctuation spacing and multiple periods
+    cleaned = cleaned.replace(/\s+([.,?!])/g, '$1');
+    cleaned = cleaned.replace(/,\s*,/g, ',');
+    cleaned = cleaned.replace(/\.\s*\./g, '.');
+
+    // Capitalize first letter of each sentence
+    cleaned = cleaned.replace(/(^\s*|[.?!]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+
+    return cleaned;
+  };
+
   const toggleSpeechRecognition = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -111,15 +154,16 @@ export const KaliseChat: React.FC<Props> = ({
       }
       const currentSpoken = finalTranscript || interimTranscript;
       if (currentSpoken) {
-        setInputText(baseTextRef.current + currentSpoken);
+        const formatted = formatSpokenText(baseTextRef.current + currentSpoken);
+        setInputText(formatted);
         if (finalTranscript) {
-          baseTextRef.current = baseTextRef.current + finalTranscript + ' ';
+          baseTextRef.current = formatSpokenText(baseTextRef.current + finalTranscript + ' ');
         }
       }
     };
 
     recognition.onerror = () => {
-      setIsListening(false);
+      // Don't kill state immediately on minor silence errors
     };
 
     recognition.onend = () => {
@@ -144,7 +188,7 @@ export const KaliseChat: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] max-h-[820px] pb-20 pt-2 animate-in fade-in duration-300">
+    <div className="flex flex-col h-[calc(100vh-110px)] pb-16 pt-1 animate-in fade-in duration-300">
       {/* Top Companion Presence Bar */}
       <div className="p-3.5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between mb-3 shadow-md">
         <div className="flex items-center gap-3">
@@ -237,7 +281,7 @@ export const KaliseChat: React.FC<Props> = ({
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in fade-in duration-200`}
             >
               <div
-                className={`max-w-[88%] rounded-3xl p-4 text-xs md:text-sm leading-relaxed ${
+                className={`max-w-[94%] rounded-3xl p-4 text-xs md:text-sm leading-relaxed ${
                   isUser
                     ? 'bg-teal-500 text-slate-950 font-medium rounded-tr-xs shadow-md'
                     : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-xs shadow-sm'
@@ -375,8 +419,8 @@ export const KaliseChat: React.FC<Props> = ({
             onKeyDown={handleKeyDown}
             placeholder={isListening ? "Listening... Speak now..." : "Talk through whatever is happening right now..."}
             disabled={isLoading}
-            rows={2}
-            className={`w-full pl-4 pr-24 py-3 rounded-2xl bg-slate-900 border text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none shadow-inner resize-none transition ${
+            rows={3}
+            className={`w-full pl-4 pr-24 py-3 rounded-2xl bg-slate-900 border text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none shadow-inner resize-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition ${
               isListening ? 'border-rose-500 ring-2 ring-rose-500/20 animate-pulse' : 'border-slate-800 focus:border-teal-500/60'
             }`}
           />
