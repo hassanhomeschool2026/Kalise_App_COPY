@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall } from 'lucide-react';
 import { ChatMessage, MoodEntry, UserSettings } from '../types';
 
@@ -16,11 +17,11 @@ interface Props {
 }
 
 const STARTER_PROMPTS = [
-  "I can't seem to turn off my racing thoughts tonight.",
-  "I feel guilty for wanting to set a firm boundary.",
-  "Help me unpack why I'm feeling so exhausted.",
-  "I had an unsettling interaction and feel misunderstood.",
-  "I feel like I'm falling behind everyone else my age.",
+  "I need to calm down.",
+  "Make me laugh.",
+  "I've got some tea to spill.",
+  "I'm overwhelmed and need to sort it out.",
+  "Help me think something through.",
 ];
 
 export const KaliseChat: React.FC<Props> = ({
@@ -41,7 +42,8 @@ export const KaliseChat: React.FC<Props> = ({
   const baseTextRef = useRef('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const isFreeLimitReached = !settings.isPremium && settings.freeMessagesUsed >= 3;
+  const bypassPaywall = import.meta.env.VITE_BYPASS_PAYWALL === 'true';
+  const isFreeLimitReached = !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -228,8 +230,12 @@ export const KaliseChat: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Free trial messages reminder */}
-      {!settings.isPremium && (
+      {/* Free trial messages reminder or testing mode badge */}
+      {bypassPaywall ? (
+        <div className="mb-2 p-1.5 px-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-300 font-medium w-fit">
+          Testing mode: paywall off
+        </div>
+      ) : !settings.isPremium && (
         <div className="mb-2 p-2 px-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/20 flex items-center justify-between text-[11px] text-indigo-300">
           <span>
             Trial: {3 - settings.freeMessagesUsed > 0 ? `${3 - settings.freeMessagesUsed} free trial messages left` : 'Trial messages completed'}
@@ -256,23 +262,22 @@ export const KaliseChat: React.FC<Props> = ({
         {messages.length === 0 && (
           <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3 my-4">
             <h3 className="text-sm md:text-base font-serif font-semibold text-slate-100">
-              Hey, welcome back. 💚 How are you feeling right now? What's been going on?
+              Hey, I'm Kalise. 💚 What's going on today?
             </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
-              Whether you need to vent, sort through something, or hear an honest perspective, we can start wherever you are.
+              We can vent, laugh, spill tea, calm down, or figure something out. Start wherever you are.
             </p>
           </div>
         )}
 
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
-          const lowerContent = msg.content.toLowerCase();
           const hasResources = !isUser && (
-            lowerContent.includes('211') ||
-            lowerContent.includes('feeding america') ||
-            lowerContent.includes('findhelp') ||
-            lowerContent.includes('food bank') ||
-            lowerContent.includes('ebt')
+            /\b211\b/.test(msg.content) ||
+            /\bfeeding america\b/i.test(msg.content) ||
+            /\bfindhelp\b/i.test(msg.content) ||
+            /\bfood banks?\b/i.test(msg.content) ||
+            /\bEBT\b/.test(msg.content)
           );
 
           return (
@@ -287,7 +292,24 @@ export const KaliseChat: React.FC<Props> = ({
                     : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-xs shadow-sm'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {isUser ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <ReactMarkdown
+                    disallowedElements={['img']}
+                    skipHtml={true}
+                    components={{
+                      p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                      ul: ({ node, ...props }) => <ul className="list-disc pl-4 space-y-1 my-2" {...props} />,
+                      ol: ({ node, ...props }) => <ol className="list-decimal pl-4 space-y-1 my-2" {...props} />,
+                      li: ({ node, ...props }) => <li className="my-0.5" {...props} />,
+                      strong: ({ node, ...props }) => <strong className="font-semibold text-slate-100" {...props} />,
+                      a: ({ node, ...props }) => <a className="text-teal-400 underline hover:text-teal-300" target="_blank" rel="noopener noreferrer" {...props} />,
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                )}
 
                 {/* Interactive Resource Quick Actions Card */}
                 {hasResources && (
@@ -360,7 +382,7 @@ export const KaliseChat: React.FC<Props> = ({
       {/* Starter Prompts (if chat is short or beginning) */}
       {messages.length <= 2 && (
         <div className="my-2 space-y-1.5">
-          <p className="text-[11px] text-slate-400 font-medium">Or explore a prompt to begin:</p>
+          <p className="text-[11px] text-slate-400 font-medium">What do you need right now?</p>
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
             {STARTER_PROMPTS.map((prompt) => (
               <button

@@ -528,7 +528,7 @@ function KaliseMainApp() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s frontend timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s frontend timeout
 
       let response: Response;
       try {
