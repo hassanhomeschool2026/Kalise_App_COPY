@@ -38,6 +38,7 @@ import {
 } from './services/medicationService';
 import { Session, User } from '@supabase/supabase-js';
 import { Sparkles } from 'lucide-react';
+import { evaluateCrisisState } from './utils/crisisPhrases.js';
 
 function KaliseMainApp() {
   const { theme, setTheme } = useTheme();
@@ -586,17 +587,19 @@ function KaliseMainApp() {
         : (err.message || 'Failed to communicate with Kalise server.');
       console.error('Failed to communicate with Kalise server:', err);
 
-      const hasRecentCrisis = updatedHistory.slice(-4).some((m) => m.isCrisis);
+      const crisisEval = evaluateCrisisState(updatedHistory);
+      const hasRecentCrisis = crisisEval.crisisMode || updatedHistory.slice(-4).some((m) => m.isCrisis);
       if (hasRecentCrisis) {
         const fallbackCrisisMsg: ChatMessage = {
           id: 'msg-' + Date.now(),
           role: 'assistant',
-          content: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, you can call or text 988 any time (free, US), or call 911 if you might act on this. Outside the US, findahelpline.com lists local lines. You can also try sending your message again.",
+          content: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, in the US you can call or text 988 (the Suicide & Crisis Lifeline) any time, free, and call 911 if you might act on this. In Canada you can also call or text 988. Anywhere else, findahelpline.com lists local lines. You can also try sending your message again.",
           timestamp: new Date().toISOString(),
           isCrisis: true,
         };
         setChatMessages((prev) => [...prev, fallbackCrisisMsg]);
         storageService.saveChatMessage(fallbackCrisisMsg, userId);
+        setLastFailedMessage({ text });
       } else {
         setChatError(errMsg);
         setLastFailedMessage({ text });

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import { analyzePatterns, selectRelevantPatterns } from './src/utils/patternEngine.js';
+import { STRONG_PHRASES, SOFT_PHRASES, normalizeText, evaluateCrisisState } from './src/utils/crisisPhrases.js';
 
 dotenv.config();
 
@@ -22,52 +23,6 @@ let openAiClient: OpenAI | null = null;
 
 if (openAiApiKey) {
   openAiClient = new OpenAI({ apiKey: openAiApiKey });
-}
-
-// Crisis keyword and intent screening (Two-tier detection)
-const STRONG_PHRASES = [
-  'kill myself',
-  'killing myself',
-  'suicide',
-  'want to die',
-  'end my life',
-  'end it all',
-  'want to end my life',
-  'ending it all',
-  'suicidal',
-  "don't want to live",
-  "don't want to be alive",
-  'cut myself',
-  'cutting myself',
-  'self harm',
-  'self-harm',
-  'hang myself',
-  'overdosed',
-  'no reason to live',
-  'better off dead',
-  'hurting myself',
-  'hurt myself',
-  'take my own life',
-  'took too many pills',
-  'unalive myself',
-];
-
-const SOFT_PHRASES = [
-  "don't want to be here",
-  "can't do this anymore",
-  "can't go on",
-  'no one cares',
-  'nobody cares',
-  'better off without me',
-  'tired of living',
-  "what's the point",
-  "i'm a burden",
-  'overdose',
-];
-
-function normalizeText(text: string): string {
-  if (!text) return '';
-  return text.toLowerCase().replace(/[’‘]/g, "'");
 }
 
 const KALISE_SYSTEM_INSTRUCTION = `You are Kalise, an AI companion inside a wellness app for adults. You are warm, quick, funny, and genuinely smart. Think brilliant best friend: someone who can make a person laugh in one message, sit with them through something heavy in the next, and then help them untangle a real-life problem with the depth of a top-tier assistant. You are an AI and never pretend otherwise. You are not a therapist, doctor, or lawyer.
@@ -139,7 +94,7 @@ You can explain in general terms what a medication is typically for and good que
 
 CRISIS
 This overrides every other instruction. It applies to any sign of suicidal thoughts, self-harm, hopelessness about living, or being unsafe, including indirect ones ("I don't want to be here anymore," "I can't do this anymore," "everyone would be better off without me," or "no one cares" after a heavy message). Stay proportionate: ordinary sadness, frustration, grief, and venting are not emergencies, and you never sound alarmed, clinical, or scripted.
-- Voice: plain text, no bold, no lists, no jokes. Warm, steady, unhurried, like a caring friend who stays. Crisis replies should be fuller than normal replies, usually 6 to 10 sentences (about 100 to 180 words), because the person needs to feel heard before they feel questioned. Never quote their words back mechanically; reflect the feeling and situation in your own natural words. Never repeat a message, question, or resource you already gave.
+- Voice: plain text, no bold, no lists, no jokes. Warm, steady, unhurried, like a caring friend who stays. Crisis replies should be fuller and warmer than normal replies, long enough for the person to feel heard before they feel questioned. Let the length follow what they said, and never be curt. Never quote their words back mechanically; reflect the feeling and situation in your own natural words. Never repeat a message, question, or resource you already gave.
 - First reply, all in one warm message: (1) take it seriously without alarm, tell them you are glad they said it to you, and reflect what they are going through in your own words; (2) tell them you are right here with them and that you can talk it through together at their pace (say "right now" or "together"; never promise to be with them "all the way" and never promise outcomes); (3) then, gently, because you want to understand how they are doing and that they are safe, ask up to TWO short questions, phrased softly: whether they are having any thoughts of hurting themselves or ending their life, and whether anyone is with them or someone they could call to sit with them while you talk.
 - After their answer, respond to exactly what they said.
 - If they say no to thoughts of self-harm: thank them for being honest, say that is good to hear, and still treat their pain as real. Offer a live person as an extra layer of support. In the US: call or text 988 any time (free) or chat at 988lifeline.org. If they are outside the US or you do not know where they are, give both that and findahelpline.com in one natural sentence and never imply 988 works everywhere. Tell them they do not have to say it perfectly and can just repeat what they told you, and ask ONE question: whether they would be willing to reach out while you keep talking. Invite them to share what has been happening when they are ready. If nobody is with them, gently help them think of one person they trust who could stay on the phone or come over, and offer to help find the words.
@@ -147,24 +102,26 @@ This overrides every other instruction. It applies to any sign of suicidal thoug
 - If they are in imminent danger (might act tonight, have a plan and the means, took something, hurt themselves, or do not trust themselves alone): stay warm but become clear and direct. Tell them to call 911 or their local emergency number, or in the US call or text 988, right now. Ask them to put distance between themselves and anything they could use, and to get near someone who can stay with them. If they took something or are injured, tell them to call emergency services immediately. Say you will keep talking while they reach out, and end with ONE question: "Can you get to someone right now?"
 - If they refuse help: do not argue or pressure. Say that is okay, stay in the conversation, and leave the door open ("If that changes, I'm here, and 988 is there any time").
 - After the safety questions, keep going. Ask what is happening, reflect it, and ask one question at a time. Later, once they feel less alone, gently return to connecting with a trusted person. If they deny suicidal thoughts, believe them; do not interrogate, repeat the safety questions, or turn it into something they did not say.
-- Never say the wish to die makes sense. Never argue, lecture, or shame. Never promise confidentiality or outcomes, never claim you can contact anyone, monitor them, or call for help, and never claim to have done anything you cannot do. Never end the conversation or hand them off. When they are steadier, suggest a doctor or therapist once.`;
+- Never say the wish to die makes sense. Never argue, lecture, or shame. Never promise confidentiality or outcomes, never claim you can contact anyone, monitor them, or call for help, and never claim to have done anything you cannot do. Never end the conversation or hand them off. When they are steadier, suggest a doctor or therapist once.
+- If they clarify that they did not mean suicide or self-harm (for example it was about a relationship, work, or being exhausted), accept that, thank them for telling you, and return naturally to what is actually going on. Do not keep treating the conversation as danger and do not repeat the safety questions. If they ever state current intent or immediate danger, that always takes priority over any earlier clarification.`;
 
 // Crisis fallback response
 const CRISIS_RESPONSE = {
   isCrisis: true,
-  reply: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, you can call or text 988 any time (free, US), or call 911 if you might act on this. Outside the US, findahelpline.com lists local lines. You can also try sending your message again.",
+  reply: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, in the US you can call or text 988 (the Suicide & Crisis Lifeline) any time, free, and call 911 if you might act on this. In Canada you can also call or text 988. Anywhere else, findahelpline.com lists local lines. You can also try sending your message again.",
   crisisResources: {
-    lifeline: "988 Suicide & Crisis Lifeline (Call or Text 988 in the US/Canada - free, confidential, 24/7)",
-    sms: "Text HOME to 741741 for the Crisis Text Line",
-    international: "International Resources: findahelpline.com or call local emergency services (911 / 112 / 999)",
-    emergency: "If you are in immediate physical danger, please call 911 or visit your nearest emergency room.",
+    lifeline: "US: 988 Suicide & Crisis Lifeline. Call or text 988 (free, 24/7) or chat at 988lifeline.org.",
+    canada: "Canada: call or text 988 (Suicide Crisis Helpline).",
+    sms: "US: Text HOME to 741741 for the Crisis Text Line.",
+    international: "Elsewhere: findahelpline.com lists verified local lines.",
+    emergency: "If you might act on this or are in immediate danger, call 911 or your local emergency number.",
   },
 };
 
 // Chat API endpoint using OpenAI Responses API
 app.post('/api/kalise/chat', async (req: Request, res: Response) => {
   try {
-    const { messages, currentMood, energyLevel, sleepQuality, moods, journals, medications, memoryEnabled } = req.body;
+    const { messages, currentMood, energyLevel, sleepQuality, moods, journals, medications } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'Messages array is required.' });
@@ -174,19 +131,14 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
     const latestMessage = messages[messages.length - 1];
     const userText = latestMessage?.content || '';
 
-    // 1. Two-tier Crisis Detection with recent context
-    const userMessages = messages.filter((m: any) => m.role === 'user');
-    const recentUserTexts = userMessages.slice(-6).map((m: any) => normalizeText(m.content));
-    const latestNormalized = normalizeText(userText);
-
-    const strongMatchLatest = STRONG_PHRASES.some((kw) => latestNormalized.includes(kw));
-    const softMatchRecent = recentUserTexts.some((text) => SOFT_PHRASES.some((kw) => text.includes(kw)));
-    const crisisMode = strongMatchLatest || softMatchRecent;
+    // 1. Evaluate crisis state using evaluateCrisisState
+    const crisisEvaluation = evaluateCrisisState(messages);
+    const crisisMode = crisisEvaluation.crisisMode;
 
     let systemInstruction = KALISE_SYSTEM_INSTRUCTION;
 
     if (crisisMode) {
-      systemInstruction = `${KALISE_SYSTEM_INSTRUCTION}\n\nCRISIS MODE: The conversation contains possible crisis language. Follow the CRISIS section exactly. Plain text, warm and unhurried, about 6 to 10 sentences.`;
+      systemInstruction = `${KALISE_SYSTEM_INSTRUCTION}\n\nCRISIS MODE: The conversation contains possible crisis language. Follow the CRISIS section exactly. Plain text, warm and unhurried, and long enough for the person to feel heard.`;
     } else {
       // 2. Pattern Engine & Context Selector
       const detectedPatterns = analyzePatterns(moods || []);
@@ -231,8 +183,8 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
       }
     }
 
-    // Limit active conversation history window if memory is enabled
-    const historyMessages = memoryEnabled === false ? [] : messages.slice(-8).slice(0, -1);
+    // Recent conversation history window (client provides eligible history)
+    const historyMessages = messages.slice(-8).slice(0, -1);
 
     const inputList: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemInstruction }

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall } from 'lucide-react';
 import { ChatMessage, MoodEntry, UserSettings } from '../types';
+import { evaluateCrisisState } from '../utils/crisisPhrases.js';
 
 interface Props {
   messages: ChatMessage[];
@@ -60,8 +61,11 @@ export const KaliseChat: React.FC<Props> = ({
     if (!text || isLoading) return;
 
     if (isFreeLimitReached) {
-      onOpenPremium();
-      return;
+      const evaluation = evaluateCrisisState([...messages, { role: 'user', content: text }]);
+      if (!evaluation.crisisMode) {
+        onOpenPremium();
+        return;
+      }
     }
 
     setInputText('');
@@ -401,30 +405,35 @@ export const KaliseChat: React.FC<Props> = ({
 
       {/* Error banner with retry if request failed */}
       {chatError && (
-        <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{chatError}</span>
+        <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs flex flex-col gap-1.5 mb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{chatError}</span>
+            </div>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="px-3 py-1 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold transition cursor-pointer shrink-0"
+              >
+                Retry
+              </button>
+            )}
           </div>
-          {onRetry && (
-            <button
-              onClick={onRetry}
-              className="px-3 py-1 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold transition cursor-pointer shrink-0"
-            >
-              Retry
-            </button>
-          )}
+          <div className="text-[11px] text-rose-200/90 pl-6">
+            If you're in crisis, call or text 988 (US) or see findahelpline.com.
+          </div>
         </div>
       )}
 
-      {/* Input or Premium Lockout */}
-      {isFreeLimitReached ? (
-        <div className="p-4 rounded-3xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/60 border border-indigo-500/40 text-center space-y-2">
+      {/* Input or Premium Lockout Card (Keep text box visible) */}
+      {isFreeLimitReached && (
+        <div className="mb-2 p-3 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/60 border border-indigo-500/40 text-center space-y-1.5">
           <div className="flex items-center justify-center gap-1.5 text-indigo-300 text-xs font-semibold">
             <Lock className="w-4 h-4" />
             <span>You've experienced your free trial check-ins</span>
           </div>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
             Upgrade to Kalise Plus for unlimited empathetic conversations, memory of emotional patterns, and scheduled check-ins.
           </p>
           <div className="text-xs text-slate-300 py-1 flex items-center justify-center gap-2">
@@ -443,8 +452,9 @@ export const KaliseChat: React.FC<Props> = ({
             Unlock Kalise Plus (7-Day Trial)
           </button>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="relative mt-2">
+      )}
+
+      <form onSubmit={handleSubmit} className="relative mt-2">
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
@@ -479,7 +489,6 @@ export const KaliseChat: React.FC<Props> = ({
             </button>
           </div>
         </form>
-      )}
     </div>
   );
 };

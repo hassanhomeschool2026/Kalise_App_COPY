@@ -50,10 +50,10 @@ export const CrisisModal: React.FC<Props> = ({ isOpen, onClose, reason }) => {
           <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 hover:border-teal-500/40 transition">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-teal-400">Free • Confidential • 24/7</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-400">Free • 24/7</span>
                 <h3 className="text-lg font-bold text-slate-100 mt-0.5">988 Suicide &amp; Crisis Lifeline</h3>
                 <p className="text-xs text-slate-300 mt-1">
-                  Immediate human connection with trained crisis counselors across the US and Canada.
+                  US: 988 Suicide &amp; Crisis Lifeline. Call or text 988, or chat at 988lifeline.org. Canada: call or text 988 (Suicide Crisis Helpline). Elsewhere: findahelpline.com.
                 </p>
               </div>
             </div>
