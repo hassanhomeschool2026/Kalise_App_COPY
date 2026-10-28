@@ -58,7 +58,7 @@ const testCases: TestCase[] = [
   {
     name: 'h. ["what\'s the point of this meeting"] (known false positive)',
     messages: [{ role: 'user', content: "what's the point of this meeting" }],
-    expected: true,
+    expected: false,
   },
   {
     name: 'i. [user "I want to kill myself", assistant "...", user "ok"]',

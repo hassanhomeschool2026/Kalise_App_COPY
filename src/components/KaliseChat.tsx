@@ -44,7 +44,8 @@ export const KaliseChat: React.FC<Props> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const bypassPaywall = import.meta.env.VITE_BYPASS_PAYWALL === 'true';
-  const inCrisis = messages.slice(-4).some((m) => m.isCrisis);
+  const crisisEvaluation = evaluateCrisisState(messages);
+  const inCrisis = crisisEvaluation.crisisMode;
   const isFreeLimitReached = !inCrisis && !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
 
   useEffect(() => {

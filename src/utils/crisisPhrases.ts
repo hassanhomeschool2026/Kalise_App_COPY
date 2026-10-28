@@ -75,6 +75,18 @@ export function normalizeText(text: string): string {
   return text.toLowerCase().replace(/[’‘]/g, "'");
 }
 
+function isContextualFalsePositive(text: string): boolean {
+  const isRelational = (text.includes('no one cares') || text.includes('nobody cares')) &&
+    (text.includes('problem') || text.includes('problems') || text.includes('listen') || text.includes('listens') || text.includes('ignored') || text.includes('ignore') || text.includes('others') || text.includes('people') || text.includes('friends') || text.includes('work') || text.includes('help') || text.includes('exhausted') || text.includes('tired'));
+
+  const isUtility = text.includes("what's the point") &&
+    (text.includes('meeting') || text.includes('project') || text.includes('homework') || text.includes('exercise') || text.includes('test') || text.includes('task') || text.includes('rule') || text.includes('feature') || text.includes('code') || text.includes('class') || text.includes('lecture') || text.includes('assignment') || text.includes('game') || text.includes('movie') || text.includes('show') || text.includes('book') || text.includes('argument'));
+
+  const hasSuicidalIntent = text.includes('live') || text.includes('life') || text.includes('alive') || text.includes('die') || text.includes('dead') || text.includes('kill') || text.includes('suicide');
+
+  return (isRelational || isUtility) && !hasSuicidalIntent;
+}
+
 export function evaluateCrisisState(messages: { role: string; content: string }[]): { crisisMode: boolean; reason: string } {
   if (!Array.isArray(messages) || messages.length === 0) {
     return { crisisMode: false, reason: 'No messages' };
@@ -93,18 +105,17 @@ export function evaluateCrisisState(messages: { role: string; content: string }[
 
   const latestStrong = STRONG_PHRASES.some((kw) => latest.includes(kw));
   const rawSoft = SOFT_PHRASES.some((kw) => latest.includes(kw));
-  const isRelationalVenting = (latest.includes('no one cares') || latest.includes('nobody cares')) &&
-    (latest.includes('problem') || latest.includes('problems') || latest.includes('listen') || latest.includes('listens') || latest.includes('ignored') || latest.includes('ignore') || latest.includes('others') || latest.includes('people') || latest.includes('friends') || latest.includes('work') || latest.includes('help') || latest.includes('exhausted') || latest.includes('tired')) &&
-    !latest.includes('live') && !latest.includes('life') && !latest.includes('alive') && !latest.includes('die') && !latest.includes('dead') && !latest.includes('kill');
-
-  const latestSoft = rawSoft && !isRelationalVenting;
+  const latestSoft = rawSoft && !isContextualFalsePositive(latest);
 
   const prev6 = previous.slice(-6);
   const prev4 = previous.slice(-4);
   const prev3 = previous.slice(-3);
 
   const strongRecent = prev6.some((msg) => STRONG_PHRASES.some((kw) => msg.includes(kw)));
-  const softRecent = prev4.some((msg) => SOFT_PHRASES.some((kw) => msg.includes(kw)));
+  const softRecent = prev4.some((msg) => {
+    const rawMatch = SOFT_PHRASES.some((kw) => msg.includes(kw));
+    return rawMatch && !isContextualFalsePositive(msg);
+  });
   const dangerRecent = prev3.some((msg) => DANGER_PHRASES.some((kw) => msg.includes(kw)));
 
   const hasClarify = MEANING_CLARIFY.some((kw) => latest.includes(kw));
