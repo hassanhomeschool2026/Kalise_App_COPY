@@ -264,18 +264,36 @@ export const storageService = {
     try {
       const key = this.getKey(STORAGE_KEYS.CHAT, userId);
       const data = localStorage.getItem(key);
+      let history: ChatMessage[] = [];
       if (!data) {
         const welcomeMessage: ChatMessage = {
           id: 'welcome-1',
           role: 'assistant',
           content: "Welcome. I'm Kalise, your companion for emotional reflection and decompression. Whatever is on your mind, big or small, this is a nonjudgmental space to slow down and talk through it. How are you feeling today?",
           timestamp: new Date().toISOString(),
+          sessionId: 'legacy-session',
         };
-        const initialChat = [welcomeMessage];
-        localStorage.setItem(key, JSON.stringify(initialChat));
-        return initialChat;
+        history = [welcomeMessage];
+        localStorage.setItem(key, JSON.stringify(history));
+        return history;
+      } else {
+        history = JSON.parse(data);
       }
-      return JSON.parse(data);
+
+      // Idempotent migration: assign 'legacy-session' only to messages lacking sessionId
+      let needsSave = false;
+      const migrated = history.map((msg) => {
+        if (!msg.sessionId) {
+          needsSave = true;
+          return { ...msg, sessionId: 'legacy-session' };
+        }
+        return msg;
+      });
+
+      if (needsSave) {
+        localStorage.setItem(key, JSON.stringify(migrated));
+      }
+      return migrated;
     } catch {
       return [];
     }

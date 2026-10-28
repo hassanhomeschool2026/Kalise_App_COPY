@@ -52,6 +52,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   isCrisis?: boolean;
+  sessionId?: string;
 }
 
 export type MedicationFrequency =

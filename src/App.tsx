@@ -59,6 +59,27 @@ function KaliseMainApp() {
   const [medications, setMedications] = useState<Medication[]>(() => storageService.getMedications(null));
   const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>(() => storageService.getMedicationLogs(null));
 
+  const [runtimeSessionId] = useState(() => 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+
+  const displayedMessages = useMemo(() => {
+    if (settings.memoryEnabled) {
+      return chatMessages;
+    }
+    const sessionMsgs = chatMessages.filter((m) => m.sessionId === runtimeSessionId);
+    if (sessionMsgs.length === 0) {
+      return [
+        {
+          id: 'welcome-' + runtimeSessionId,
+          role: 'assistant' as const,
+          content: "Welcome. I'm Kalise, your companion for emotional reflection and decompression. Whatever is on your mind, big or small, this is a nonjudgmental space to slow down and talk through it. How are you feeling today?",
+          timestamp: new Date().toISOString(),
+          sessionId: runtimeSessionId,
+        },
+      ];
+    }
+    return sessionMsgs;
+  }, [chatMessages, settings.memoryEnabled, runtimeSessionId]);
+
   const [isMedicationsOpen, setIsMedicationsOpen] = useState(false);
   const [isCrisisModalOpen, setIsCrisisModalOpen] = useState(false);
   const [crisisReason, setCrisisReason] = useState<string | undefined>(undefined);
@@ -519,6 +540,7 @@ function KaliseMainApp() {
         role: 'user',
         content: text,
         timestamp: new Date().toISOString(),
+        sessionId: runtimeSessionId,
       };
       updatedHistory = [...chatMessages, userMsg];
       setChatMessages(updatedHistory);
@@ -533,11 +555,15 @@ function KaliseMainApp() {
 
       let response: Response;
       try {
+        const messagesToSend = settings.memoryEnabled
+          ? updatedHistory
+          : updatedHistory.filter((m) => m.sessionId === runtimeSessionId);
+
         response = await fetch('/api/kalise/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: updatedHistory.map((m) => ({ role: m.role, content: m.content })),
+            messages: messagesToSend.map((m) => ({ role: m.role, content: m.content })),
             currentMood: latestMood?.label,
             energyLevel: latestMood?.energyLevel,
             sleepQuality: latestMood?.sleepQuality,
@@ -577,6 +603,7 @@ function KaliseMainApp() {
         content: data.reply,
         timestamp: new Date().toISOString(),
         isCrisis: data.isCrisis,
+        sessionId: runtimeSessionId,
       };
 
       setChatMessages((prev) => [...prev, assistantMsg]);
@@ -596,6 +623,7 @@ function KaliseMainApp() {
           content: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, in the US you can call or text 988 (the Suicide & Crisis Lifeline) any time, free, and call 911 if you might act on this. In Canada you can also call or text 988. Anywhere else, findahelpline.com lists local lines. You can also try sending your message again.",
           timestamp: new Date().toISOString(),
           isCrisis: true,
+          sessionId: runtimeSessionId,
         };
         setChatMessages((prev) => [...prev, fallbackCrisisMsg]);
         storageService.saveChatMessage(fallbackCrisisMsg, userId);
@@ -735,7 +763,7 @@ function KaliseMainApp() {
 
         {activeTab === 'kalise' && (
           <KaliseChat
-            messages={chatMessages}
+            messages={displayedMessages}
             onSendMessage={handleSendMessage}
             onClearChat={handleClearChat}
             onOpenCrisis={handleOpenCrisisModal}
