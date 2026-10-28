@@ -62,7 +62,25 @@ function KaliseMainApp() {
   const [runtimeSessionId] = useState(() => 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
 
   const displayedMessages = useMemo(() => {
+    let welcomeText = "Welcome. I'm Kalise, your companion for emotional reflection and decompression. Whatever is on your mind, big or small, this is a nonjudgmental space to slow down and talk through it. How are you feeling today?";
+    if (moods.length > 0) {
+      welcomeText = `Hey there. I noticed you logged feeling "${moods[0].label}" earlier today. How are things settling in for you right now?`;
+    } else if (journals.length > 0) {
+      welcomeText = `Hey. I saw your recent journal entry "${journals[0].title}". How are you holding up with that right now?`;
+    }
+
     if (settings.memoryEnabled) {
+      if (chatMessages.length === 0) {
+        return [
+          {
+            id: 'welcome-' + runtimeSessionId,
+            role: 'assistant' as const,
+            content: welcomeText,
+            timestamp: new Date().toISOString(),
+            sessionId: runtimeSessionId,
+          },
+        ];
+      }
       return chatMessages;
     }
     const sessionMsgs = chatMessages.filter((m) => m.sessionId === runtimeSessionId);
@@ -71,14 +89,14 @@ function KaliseMainApp() {
         {
           id: 'welcome-' + runtimeSessionId,
           role: 'assistant' as const,
-          content: "Welcome. I'm Kalise, your companion for emotional reflection and decompression. Whatever is on your mind, big or small, this is a nonjudgmental space to slow down and talk through it. How are you feeling today?",
+          content: welcomeText,
           timestamp: new Date().toISOString(),
           sessionId: runtimeSessionId,
         },
       ];
     }
     return sessionMsgs;
-  }, [chatMessages, settings.memoryEnabled, runtimeSessionId]);
+  }, [chatMessages, settings.memoryEnabled, runtimeSessionId, moods, journals]);
 
   const [isMedicationsOpen, setIsMedicationsOpen] = useState(false);
   const [isCrisisModalOpen, setIsCrisisModalOpen] = useState(false);
@@ -770,6 +788,7 @@ function KaliseMainApp() {
             onOpenPremium={() => setIsPremiumModalOpen(true)}
             settings={settings}
             latestMood={latestMood}
+            journals={journals}
             isLoading={isChatLoading}
             chatError={chatError}
             onRetry={handleRetryLastMessage}
