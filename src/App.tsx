@@ -561,8 +561,8 @@ function KaliseMainApp() {
         throw new Error(data.message || 'AI returned no valid response text.');
       }
 
-      // Successful response: increment free messages if not premium
-      if (!settings.isPremium) {
+      // Successful response: increment free messages if not premium and not crisis
+      if (!settings.isPremium && !data.isCrisis) {
         const newSettings = {
           ...settings,
           freeMessagesUsed: (settings.freeMessagesUsed || 0) + 1,
@@ -580,20 +580,27 @@ function KaliseMainApp() {
 
       setChatMessages((prev) => [...prev, assistantMsg]);
       storageService.saveChatMessage(assistantMsg, userId);
-
-      if (data.isCrisis) {
-        setCrisisReason(
-          'I noticed that you might be going through immense pain right now. Your safety and well-being come first.'
-        );
-        setIsCrisisModalOpen(true);
-      }
     } catch (err: any) {
       const errMsg = err.name === 'AbortError' || err.message?.includes('aborted')
         ? 'The request timed out. Please check your connection and retry.'
         : (err.message || 'Failed to communicate with Kalise server.');
       console.error('Failed to communicate with Kalise server:', err);
-      setChatError(errMsg);
-      setLastFailedMessage({ text });
+
+      const hasRecentCrisis = updatedHistory.slice(-4).some((m) => m.isCrisis);
+      if (hasRecentCrisis) {
+        const fallbackCrisisMsg: ChatMessage = {
+          id: 'msg-' + Date.now(),
+          role: 'assistant',
+          content: "I'm having trouble responding right now, and I'm sorry. What you're feeling matters. If you want a live person, you can call or text 988 any time (free, US), or call 911 if you might act on this. Outside the US, findahelpline.com lists local lines. You can also try sending your message again.",
+          timestamp: new Date().toISOString(),
+          isCrisis: true,
+        };
+        setChatMessages((prev) => [...prev, fallbackCrisisMsg]);
+        storageService.saveChatMessage(fallbackCrisisMsg, userId);
+      } else {
+        setChatError(errMsg);
+        setLastFailedMessage({ text });
+      }
     } finally {
       setIsChatLoading(false);
       inFlightRef.current = false;

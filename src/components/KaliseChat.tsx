@@ -43,7 +43,8 @@ export const KaliseChat: React.FC<Props> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const bypassPaywall = import.meta.env.VITE_BYPASS_PAYWALL === 'true';
-  const isFreeLimitReached = !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
+  const inCrisis = messages.slice(-4).some((m) => m.isCrisis);
+  const isFreeLimitReached = !inCrisis && !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -345,19 +346,19 @@ export const KaliseChat: React.FC<Props> = ({
 
               {/* Crisis safeguard trigger if response flagged crisis */}
               {msg.isCrisis && (
-                <div className="mt-2 max-w-[86%] p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs">
-                  <div className="flex items-center gap-1.5 font-semibold text-rose-300">
-                    <AlertCircle className="w-4 h-4 text-rose-400" />
-                    <span>Immediate Crisis Support Available</span>
+                <div className="mt-2 max-w-[86%] p-3 rounded-2xl bg-slate-900/90 border border-teal-500/30 text-slate-200 text-xs shadow-md">
+                  <div className="flex items-center gap-1.5 font-semibold text-teal-300">
+                    <Heart className="w-4 h-4 text-teal-400 fill-teal-400/20" />
+                    <span>Support is always here</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-rose-200/90">
-                    Please call or text <strong>988</strong> anytime for confidential, free support.
+                  <p className="mt-1 text-[11px] text-slate-300">
+                    Call or text 988 any time (free, US). Outside the US, see findahelpline.com.
                   </p>
                   <button
-                    onClick={() => onOpenCrisis("I detected feelings of immediate crisis in our conversation. Please reach out to someone who can help keep you safe.")}
-                    className="mt-2 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold text-xs transition cursor-pointer"
+                    onClick={() => onOpenCrisis("I noticed things feel heavy right now. Please reach out to someone who can help support you safely.")}
+                    className="mt-2 px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-sm"
                   >
-                    View 988 Lifeline &amp; Safety Guide
+                    Crisis resources
                   </button>
                 </div>
               )}
@@ -426,6 +427,15 @@ export const KaliseChat: React.FC<Props> = ({
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
             Upgrade to Kalise Plus for unlimited empathetic conversations, memory of emotional patterns, and scheduled check-ins.
           </p>
+          <div className="text-xs text-slate-300 py-1 flex items-center justify-center gap-2">
+            <span>Need support right now? Call or text 988 (US).</span>
+            <button
+              onClick={() => onOpenCrisis()}
+              className="text-teal-400 hover:text-teal-300 underline font-medium cursor-pointer"
+            >
+              Crisis resources
+            </button>
+          </div>
           <button
             onClick={onOpenPremium}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-teal-500 text-slate-950 font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-lg shadow-indigo-500/20"
