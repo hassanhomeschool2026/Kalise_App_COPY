@@ -104,6 +104,21 @@ const testCases: TestCase[] = [
     ],
     expected: false,
   },
+  {
+    name: 'l. ["No one cares about my problems. I\'m tired of being ignored."]',
+    messages: [{ role: 'user', content: "No one cares about my problems. I'm tired of being ignored." }],
+    expected: false,
+  },
+  {
+    name: 'm. ["Nobody listens to me, and I\'m exhausted."]',
+    messages: [{ role: 'user', content: "Nobody listens to me, and I'm exhausted." }],
+    expected: false,
+  },
+  {
+    name: 'n. ["Nobody cares, and I don\'t want to be alive anymore."]',
+    messages: [{ role: 'user', content: "Nobody cares, and I don't want to be alive anymore." }],
+    expected: true,
+  },
 ];
 
 let failed = false;

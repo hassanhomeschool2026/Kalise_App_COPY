@@ -349,7 +349,7 @@ export const KaliseChat: React.FC<Props> = ({
               </div>
 
               {/* Crisis safeguard trigger if response flagged crisis */}
-              {msg.isCrisis && (
+              {msg.isCrisis && inCrisis && msg === messages[messages.length - 1] && (
                 <div className="mt-2 max-w-[86%] p-3 rounded-2xl bg-slate-900/90 border border-teal-500/30 text-slate-200 text-xs shadow-md">
                   <div className="flex items-center gap-1.5 font-semibold text-teal-300">
                     <Heart className="w-4 h-4 text-teal-400 fill-teal-400/20" />

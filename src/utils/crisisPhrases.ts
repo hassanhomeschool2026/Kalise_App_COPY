@@ -92,7 +92,12 @@ export function evaluateCrisisState(messages: { role: string; content: string }[
   const previous = userMsgs.slice(0, userMsgs.length - 1);
 
   const latestStrong = STRONG_PHRASES.some((kw) => latest.includes(kw));
-  const latestSoft = SOFT_PHRASES.some((kw) => latest.includes(kw));
+  const rawSoft = SOFT_PHRASES.some((kw) => latest.includes(kw));
+  const isRelationalVenting = (latest.includes('no one cares') || latest.includes('nobody cares')) &&
+    (latest.includes('problem') || latest.includes('problems') || latest.includes('listen') || latest.includes('listens') || latest.includes('ignored') || latest.includes('ignore') || latest.includes('others') || latest.includes('people') || latest.includes('friends') || latest.includes('work') || latest.includes('help') || latest.includes('exhausted') || latest.includes('tired')) &&
+    !latest.includes('live') && !latest.includes('life') && !latest.includes('alive') && !latest.includes('die') && !latest.includes('dead') && !latest.includes('kill');
+
+  const latestSoft = rawSoft && !isRelationalVenting;
 
   const prev6 = previous.slice(-6);
   const prev4 = previous.slice(-4);
