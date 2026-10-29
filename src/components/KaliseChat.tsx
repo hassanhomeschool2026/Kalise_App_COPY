@@ -104,25 +104,72 @@ export const KaliseChat: React.FC<Props> = ({
     return () => clearInterval(timer);
   }, [breathingActive, breathPhase]);
 
-  const handleSpeak = (msgId: string, text: string) => {
-    if (!('speechSynthesis' in window)) {
-      setAudioError('Text-to-speech is not supported in this browser.');
+  const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
+  const [loadingAudioMsgId, setLoadingAudioMsgId] = useState<string | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleSpeak = async (msgId: string, text: string) => {
+    if (playingMsgId === msgId) {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      setPlayingMsgId(null);
+      setLoadingAudioMsgId(null);
       return;
     }
-    if (speakingMsgId === msgId) {
-      window.speechSynthesis.cancel();
-      setSpeakingMsgId(null);
-      return;
+
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
     }
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/\[.*?\]/g, '').replace(/[*_#`]/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    utterance.onend = () => setSpeakingMsgId(null);
-    utterance.onerror = () => setSpeakingMsgId(null);
-    setSpeakingMsgId(msgId);
-    window.speechSynthesis.speak(utterance);
+    setPlayingMsgId(null);
+    setLoadingAudioMsgId(msgId);
+
+    try {
+      const response = await fetch('/api/audio/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to generate speech');
+      }
+
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+
+      audio.onplay = () => {
+        setLoadingAudioMsgId(null);
+        setPlayingMsgId(msgId);
+      };
+
+      audio.onended = () => {
+        setPlayingMsgId(null);
+        setLoadingAudioMsgId(null);
+        currentAudioRef.current = null;
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setPlayingMsgId(null);
+        setLoadingAudioMsgId(null);
+        currentAudioRef.current = null;
+        URL.revokeObjectURL(audioUrl);
+        setAudioError('Playback failed. Please try again.');
+      };
+
+      await audio.play();
+    } catch (err: any) {
+      console.error('Cartesia speech playback error:', err);
+      setLoadingAudioMsgId(null);
+      setPlayingMsgId(null);
+      setAudioError(err?.message || 'Could not play voice message.');
+    }
   };
 
   const setupAudioVisualizer = (stream: MediaStream) => {
@@ -338,7 +385,7 @@ export const KaliseChat: React.FC<Props> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              {latestMood ? `Aware of your "${latestMood.label}" mood` : 'Present & listening'}
+              Present & listening
             </p>
           </div>
         </div>
@@ -355,13 +402,6 @@ export const KaliseChat: React.FC<Props> = ({
           >
             <Wind className="w-4 h-4" />
             <span className="hidden sm:inline">Breathe</span>
-          </button>
-          <button
-            onClick={() => onOpenCrisis()}
-            className="p-1.5 rounded-xl text-rose-300 hover:bg-rose-500/15 border border-rose-500/20 transition cursor-pointer"
-            title="Crisis Resources & 988"
-          >
-            <Heart className="w-4 h-4 fill-rose-400/20" />
           </button>
           <button
             onClick={onClearChat}
@@ -467,14 +507,21 @@ export const KaliseChat: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => handleSpeak(msg.id, msg.content)}
-                    className={`absolute top-3 right-3 p-1.5 rounded-xl transition cursor-pointer ${
-                      isSpeaking
-                        ? 'bg-teal-500 text-slate-950 animate-pulse'
+                    disabled={loadingAudioMsgId === msg.id}
+                    className={`absolute top-3 right-3 p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 ${
+                      playingMsgId === msg.id
+                        ? 'bg-teal-500 text-slate-950 font-medium'
                         : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                     }`}
-                    title={isSpeaking ? "Stop listening" : "Listen aloud"}
+                    title={playingMsgId === msg.id ? "Stop reading" : "Read aloud with Cartesia voice"}
                   >
-                    {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    {loadingAudioMsgId === msg.id ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-300" />
+                    ) : playingMsgId === msg.id ? (
+                      <VolumeX className="w-3.5 h-3.5" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
                   </button>
                 )}
 
@@ -632,31 +679,7 @@ export const KaliseChat: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Contextual Quick-Attach Pills Bar */}
-      <div className="flex items-center gap-1.5 mb-1.5 overflow-x-auto no-scrollbar">
-        <span className="text-[10px] text-slate-500 shrink-0 font-medium">Attach:</span>
-        {latestMood && (
-          <button
-            type="button"
-            onClick={() => setInputText((prev) => (prev ? prev + ' ' : '') + `[Regarding my mood today: ${latestMood.label}] `)}
-            className="px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-teal-300 text-[11px] border border-teal-500/20 transition cursor-pointer flex items-center gap-1 shrink-0"
-            title="Attach today's mood score"
-          >
-            <span>⚡ Mood: {latestMood.label}</span>
-          </button>
-        )}
-        {journals.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setInputText((prev) => (prev ? prev + ' ' : '') + `[Reference Journal: "${journals[0].title}"] `)}
-            className="px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-indigo-300 text-[11px] border border-indigo-500/20 transition cursor-pointer flex items-center gap-1 shrink-0"
-            title="Reference recent journal"
-          >
-            <BookOpen className="w-3 h-3" />
-            <span className="truncate max-w-[120px]">Journal: {journals[0].title}</span>
-          </button>
-        )}
-      </div>
+
 
       {/* Audio Error Banner */}
       {audioError && (

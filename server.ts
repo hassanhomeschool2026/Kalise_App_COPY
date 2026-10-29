@@ -262,6 +262,61 @@ app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, r
   }
 });
 
+// Cartesia Text-to-Speech endpoint
+app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      res.status(400).json({ error: 'MISSING_TEXT', message: 'Text is required for text-to-speech.' });
+      return;
+    }
+
+    if (!process.env.CARTESIA_API_KEY) {
+      res.status(503).json({ error: 'AI_UNAVAILABLE', message: 'CARTESIA_API_KEY not configured.' });
+      return;
+    }
+
+    const cartesiaRes = await fetch('https://api.cartesia.ai/tts/bytes', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.CARTESIA_API_KEY}`,
+        'Cartesia-Version': '2026-08-14',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model_id: 'sonic-3.5',
+        transcript: text,
+        voice: {
+          mode: 'id',
+          id: 'af346552-54bf-4c2b-a4d4-9d2820f51b6c', // Valerie
+        },
+        output_format: {
+          container: 'mp3',
+          sample_rate: 44100,
+          bit_rate: 128000,
+        },
+      }),
+    });
+
+    if (!cartesiaRes.ok) {
+      const errText = await cartesiaRes.text();
+      console.error('Cartesia TTS error:', cartesiaRes.status, errText);
+      res.status(502).json({ error: 'TTS_FAILED', message: `Cartesia API error: ${errText}` });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const arrayBuffer = await cartesiaRes.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    console.error('Cartesia speech generation exception:', err);
+    res.status(500).json({
+      error: 'SPEECH_FAILED',
+      message: err?.message || 'Failed to generate speech audio',
+    });
+  }
+});
+
 // Dedicated verification endpoint for testing OpenAI connection
 app.get('/api/ai/test', async (_req: Request, res: Response) => {
   if (!openAiClient) {
