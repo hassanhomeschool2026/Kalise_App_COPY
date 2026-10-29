@@ -12,6 +12,9 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        },
         manifest: {
           id: '/',
           name: 'Kalise - Emotional Wellness & AI Companion',

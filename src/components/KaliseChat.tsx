@@ -40,9 +40,17 @@ export const KaliseChat: React.FC<Props> = ({
   onRetry,
 }) => {
   const [inputText, setInputText] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const baseTextRef = useRef('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [waveformLevels, setWaveformLevels] = useState<number[]>([20, 20, 20, 20, 20]);
+  const [audioError, setAudioError] = useState<string | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const shouldAutoSendRef = useRef<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Text-to-Speech State
@@ -98,7 +106,7 @@ export const KaliseChat: React.FC<Props> = ({
 
   const handleSpeak = (msgId: string, text: string) => {
     if (!('speechSynthesis' in window)) {
-      alert('Text-to-speech is not supported in this browser.');
+      setAudioError('Text-to-speech is not supported in this browser.');
       return;
     }
     if (speakingMsgId === msgId) {
@@ -117,14 +125,56 @@ export const KaliseChat: React.FC<Props> = ({
     window.speechSynthesis.speak(utterance);
   };
 
+  const setupAudioVisualizer = (stream: MediaStream) => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      analyserRef.current = analyser;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateWaveform = () => {
+        if (!analyserRef.current) return;
+        analyser.getByteFrequencyData(dataArray);
+        const bars = [dataArray[2] || 10, dataArray[6] || 15, dataArray[10] || 20, dataArray[14] || 15, dataArray[18] || 10];
+        const normalized = bars.map(v => Math.max(10, Math.min(100, (v / 255) * 100)));
+        setWaveformLevels(normalized);
+        animationFrameRef.current = requestAnimationFrame(updateWaveform);
+      };
+      updateWaveform();
+    } catch (e) {
+      console.error('Visualizer setup error:', e);
+    }
+  };
+
+  const cleanupAudioVisualizer = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    analyserRef.current = null;
+    setWaveformLevels([20, 20, 20, 20, 20]);
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (isRecording && mediaRecorderRef.current) {
+      shouldAutoSendRef.current = true;
+      mediaRecorderRef.current.stop();
+      return;
     }
     const text = inputText.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || isTranscribing) return;
 
     if (isFreeLimitReached) {
       const evaluation = evaluateCrisisState([...messages, { role: 'user', content: text }]);
@@ -135,7 +185,6 @@ export const KaliseChat: React.FC<Props> = ({
     }
 
     setInputText('');
-    baseTextRef.current = '';
     await onSendMessage(text);
   };
 
@@ -146,97 +195,120 @@ export const KaliseChat: React.FC<Props> = ({
     }
   };
 
-  const formatSpokenText = (raw: string) => {
-    let cleaned = raw
-      .replace(/\b(period|full stop)\b/gi, '.')
-      .replace(/\bquestion mark\b/gi, '?')
-      .replace(/\bcomma\b/gi, ',')
-      .replace(/\bexclamation (point|mark)\b/gi, '!')
-      .replace(/\bnew line\b/gi, '\n');
-
-    cleaned = cleaned.replace(/\b(anyway|honestly|seriously|basically|look|well)\s+/gi, '. $1 ');
-    cleaned = cleaned.replace(/(\b\w{3,}\b)\s+(and|but|so|because|yet|then|although|though|while)\s+/gi, '$1, $2 ');
-
-    const sentences = cleaned.split(/(?<=[.?!])\s+/);
-    cleaned = sentences.map(sentence => {
-      const words = sentence.split(/\s+/);
-      if (words.length > 12 && !/[.?!]$/.test(sentence)) {
-        words.splice(10, 0, '.');
-        return words.join(' ');
-      }
-      return sentence;
-    }).join(' ');
-
-    if (/^(who|what|where|when|why|how|is|are|can|do|does|did|will|would|should|could)\b/i.test(cleaned.trim()) && !/[.?!]$/.test(cleaned.trim())) {
-      cleaned = cleaned.trim() + '?';
-    } else if (!/[.?!]$/.test(cleaned.trim()) && cleaned.trim().length > 0) {
-      cleaned = cleaned.trim() + '.';
+  const handleCancelRecording = () => {
+    if (isRecording && mediaRecorderRef.current) {
+      audioChunksRef.current = [];
+      shouldAutoSendRef.current = false;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      cleanupAudioVisualizer();
     }
-
-    cleaned = cleaned.replace(/\s+([.,?!])/g, '$1');
-    cleaned = cleaned.replace(/,\s*,/g, ',');
-    cleaned = cleaned.replace(/\.\s*\./g, '.');
-    cleaned = cleaned.replace(/(^\s*|[.?!]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
-
-    return cleaned;
   };
 
-  const toggleSpeechRecognition = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser. You can type your message directly.");
+  const handleToggleRecording = async () => {
+    if (isTranscribing || isLoading) return;
+
+    if (isRecording) {
+      shouldAutoSendRef.current = false;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
       return;
     }
 
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
-    }
-
-    baseTextRef.current = inputText ? inputText.trim() + ' ' : '';
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-      const currentSpoken = finalTranscript || interimTranscript;
-      if (currentSpoken) {
-        const formatted = formatSpokenText(baseTextRef.current + currentSpoken);
-        setInputText(formatted);
-        if (finalTranscript) {
-          baseTextRef.current = formatSpokenText(baseTextRef.current + finalTranscript + ' ');
-        }
-      }
-    };
-
-    recognition.onerror = () => {};
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
+    setAudioError(null);
     try {
-      recognition.start();
-    } catch (err) {
-      setIsListening(false);
+      audioChunksRef.current = [];
+      shouldAutoSendRef.current = false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        } else {
+          mimeType = '';
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mediaRecorder;
+
+      setupAudioVisualizer(stream);
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecording(false);
+        cleanupAudioVisualizer();
+
+        if (audioChunksRef.current.length === 0) {
+          return;
+        }
+
+        const blobType = mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+
+        if (audioBlob.size === 0) {
+          return;
+        }
+
+        setIsTranscribing(true);
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, blobType.includes('mp4') ? 'voice_message.mp4' : 'voice_message.webm');
+
+          const response = await fetch('/api/audio/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || 'Transcription failed');
+          }
+
+          if (data.text) {
+            const transcribed = data.text;
+            if (shouldAutoSendRef.current) {
+              const combinedText = inputText.trim() ? `${inputText.trim()} ${transcribed}` : transcribed;
+              setInputText('');
+              if (isFreeLimitReached) {
+                const evaluation = evaluateCrisisState([...messages, { role: 'user', content: combinedText }]);
+                if (!evaluation.crisisMode) {
+                  onOpenPremium();
+                  return;
+                }
+              }
+              await onSendMessage(combinedText);
+            } else {
+              setInputText((prev) => (prev ? `${prev} ${transcribed}` : transcribed));
+            }
+          }
+        } catch (err: any) {
+          console.error('Transcription error:', err);
+          setAudioError(err?.message || 'Could not process audio. Please try again.');
+        } finally {
+          setIsTranscribing(false);
+          shouldAutoSendRef.current = false;
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      console.error('Microphone access error:', err);
+      setAudioError('Could not access microphone. Please check permissions.');
+      setIsRecording(false);
+      setIsTranscribing(false);
+      cleanupAudioVisualizer();
     }
   };
 
@@ -586,36 +658,93 @@ export const KaliseChat: React.FC<Props> = ({
         )}
       </div>
 
+      {/* Audio Error Banner */}
+      {audioError && (
+        <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs flex items-center justify-between mb-2 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{audioError}</span>
+          </div>
+          <button
+            onClick={() => setAudioError(null)}
+            className="p-1 rounded-lg hover:bg-rose-500/20 text-rose-300 transition cursor-pointer"
+            title="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="relative">
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? "Listening... Speak now..." : "Talk through whatever is happening right now..."}
-          disabled={isLoading}
+          placeholder={
+            isRecording
+              ? "Listening... (tap mic to review, or arrow to send)"
+              : isTranscribing
+              ? "Gathering thoughts..."
+              : "Talk through whatever is happening right now..."
+          }
+          disabled={isLoading || isTranscribing}
           rows={3}
-          className={`w-full pl-4 pr-24 py-3 rounded-2xl bg-slate-900 border text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none shadow-inner resize-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition ${
-            isListening ? 'border-rose-500 ring-2 ring-rose-500/20 animate-pulse' : 'border-slate-800 focus:border-teal-500/60'
+          className={`w-full pl-4 pr-36 py-3 rounded-2xl bg-slate-900 border text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none shadow-inner resize-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition ${
+            isRecording ? 'border-rose-500 ring-2 ring-rose-500/20 animate-pulse' : 'border-slate-800 focus:border-teal-500/60'
           }`}
         />
         <div className="absolute right-2.5 bottom-3.5 flex items-center gap-1.5">
+          {/* Live Audio Waveform Indicator */}
+          {isRecording && (
+            <div className="flex items-center gap-1 px-2 py-1.5 bg-rose-500/10 rounded-xl border border-rose-500/20 mr-0.5">
+              {waveformLevels.map((height, i) => (
+                <span
+                  key={i}
+                  className="w-1 bg-rose-400 rounded-full transition-all duration-75"
+                  style={{ height: `${Math.max(6, (height / 100) * 18)}px` }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Cancel button during recording */}
+          {isRecording && (
+            <button
+              type="button"
+              onClick={handleCancelRecording}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition cursor-pointer shadow-sm"
+              title="Discard recording"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={toggleSpeechRecognition}
-            className={`p-2 rounded-xl transition cursor-pointer shadow-sm ${
-              isListening
+            onClick={handleToggleRecording}
+            disabled={isLoading || isTranscribing}
+            className={`p-2 rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center ${
+              isRecording
                 ? 'bg-rose-500 text-slate-950 animate-bounce'
+                : isTranscribing
+                ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
             }`}
-            title={isListening ? "Stop listening" : "Speech to text dictation"}
+            title={isRecording ? "Stop recording & review in input" : isTranscribing ? "Gathering thoughts..." : "Record voice message"}
           >
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isTranscribing ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-teal-300" />
+            ) : isRecording ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
           </button>
           <button
             type="submit"
-            disabled={!inputText.trim() || isLoading}
+            disabled={(!inputText.trim() && !isRecording) || isLoading || isTranscribing}
             className="p-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 disabled:opacity-40 transition cursor-pointer shadow-sm"
-            title="Send message"
+            title={isRecording ? "Stop recording & send immediately" : "Send message"}
           >
             <Send className="w-4 h-4" />
           </button>

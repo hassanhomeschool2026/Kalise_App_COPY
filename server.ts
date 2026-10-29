@@ -2,7 +2,8 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
+import multer from 'multer';
 import { analyzePatterns, selectRelevantPatterns } from './src/utils/patternEngine.js';
 import { STRONG_PHRASES, SOFT_PHRASES, normalizeText, evaluateCrisisState } from './src/utils/crisisPhrases.js';
 
@@ -15,6 +16,12 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+
+// Initialize multer memory storage for audio uploads (up to 25MB)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 // Initialize OpenAI client if key is present
 const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -219,6 +226,38 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
     res.status(503).json({
       error: 'AI_UNAVAILABLE',
       message: isAbort ? 'The request timed out. Please retry.' : 'Unable to process conversation at this time. Please check API key and network connection.',
+    });
+  }
+});
+
+// Audio transcription endpoint using OpenAI Whisper API
+app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!openAiClient) {
+      res.status(503).json({ error: 'AI_UNAVAILABLE', message: 'OpenAI client not configured.' });
+      return;
+    }
+    if (!req.file || !req.file.buffer) {
+      res.status(400).json({ error: 'NO_FILE', message: 'No audio file received.' });
+      return;
+    }
+
+    const file = await toFile(req.file.buffer, req.file.originalname || 'recording.webm', {
+      type: req.file.mimetype || 'audio/webm',
+    });
+
+    const transcription = await openAiClient.audio.transcriptions.create({
+      file: file,
+      model: 'whisper-1',
+      language: 'en',
+    });
+
+    res.json({ text: transcription.text });
+  } catch (err: any) {
+    console.error('Whisper transcription error:', err);
+    res.status(500).json({
+      error: 'TRANSCRIPTION_FAILED',
+      message: err?.message || 'Failed to transcribe audio'
     });
   }
 });
