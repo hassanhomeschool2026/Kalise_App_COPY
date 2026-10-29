@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall, Volume2, VolumeX, Wind, CheckSquare, Square, BookOpen, X } from 'lucide-react';
 import { ChatMessage, MoodEntry, UserSettings, JournalEntry } from '../types';
 import { evaluateCrisisState } from '../utils/crisisPhrases.js';
+import { KaliseOrb, OrbState } from './KaliseOrb';
 
 interface Props {
   messages: ChatMessage[];
@@ -55,6 +56,9 @@ export const KaliseChat: React.FC<Props> = ({
 
   // Text-to-Speech State
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
+  const [loadingAudioMsgId, setLoadingAudioMsgId] = useState<string | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Interactive Breathing Widget State
   const [breathingActive, setBreathingActive] = useState(false);
@@ -67,6 +71,14 @@ export const KaliseChat: React.FC<Props> = ({
   const isFreeLimitReached = !inCrisis && !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
 
   const [isCrisisPillDismissed, setIsCrisisPillDismissed] = useState(false);
+
+  const currentOrbState: OrbState = isRecording
+    ? 'listening'
+    : isLoading || loadingAudioMsgId !== null || playingMsgId !== null
+    ? 'responding'
+    : breathingActive
+    ? 'breathing'
+    : 'idle';
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -103,10 +115,6 @@ export const KaliseChat: React.FC<Props> = ({
     }
     return () => clearInterval(timer);
   }, [breathingActive, breathPhase]);
-
-  const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
-  const [loadingAudioMsgId, setLoadingAudioMsgId] = useState<string | null>(null);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleSpeak = async (msgId: string, text: string) => {
     if (playingMsgId === msgId) {
@@ -373,10 +381,7 @@ export const KaliseChat: React.FC<Props> = ({
       {/* Top Companion Presence Bar */}
       <div className="p-3.5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between mb-3 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-teal-500/20 to-indigo-500/30 border border-teal-400/40 flex items-center justify-center animate-serene-breathe">
-            <MessageSquareHeart className="w-5 h-5 text-teal-300" />
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-teal-400 border-2 border-slate-900" />
-          </div>
+          <KaliseOrb state={currentOrbState} size="md" />
           <div>
             <div className="flex items-center gap-1.5">
               <h2 className="text-sm font-semibold text-slate-100 font-serif">Kalise</h2>
@@ -495,6 +500,12 @@ export const KaliseChat: React.FC<Props> = ({
               key={msg.id}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in fade-in duration-200`}
             >
+              {!isUser && (
+                <div className="flex items-center gap-1.5 mb-1 pl-1">
+                  <KaliseOrb state="idle" size="sm" />
+                  <span className="text-[11px] font-semibold text-slate-300 font-serif">Kalise</span>
+                </div>
+              )}
               <div
                 className={`max-w-[94%] rounded-3xl p-4 text-xs md:text-sm leading-relaxed relative group ${
                   isUser
