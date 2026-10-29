@@ -99,7 +99,7 @@ export const HomeDashboard: React.FC<Props> = ({
             <h2 className="text-sm font-semibold text-slate-200">How are you feeling right now?</h2>
           </div>
           <button
-            onClick={() => onNavigate('mood')}
+            onClick={() => onNavigate('reflect')}
             className="text-xs text-teal-300 hover:text-teal-200 flex items-center gap-1 font-medium cursor-pointer"
           >
             <span>{latestMood ? 'Update' : 'Check in'}</span>
@@ -142,7 +142,7 @@ export const HomeDashboard: React.FC<Props> = ({
               </div>
             </div>
             <button
-              onClick={() => onNavigate('mood')}
+              onClick={() => onNavigate('reflect')}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 transition cursor-pointer"
             >
               View Log
@@ -151,7 +151,7 @@ export const HomeDashboard: React.FC<Props> = ({
         ) : (
           <div className="mt-4">
             <button
-              onClick={() => onNavigate('mood')}
+              onClick={() => onNavigate('reflect')}
               className="w-full py-3 px-4 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs tracking-wide transition cursor-pointer flex items-center justify-between shadow-lg shadow-teal-500/15"
             >
               <span className="flex items-center gap-2">
@@ -382,7 +382,7 @@ export const HomeDashboard: React.FC<Props> = ({
           </div>
         </div>
         <button
-          onClick={() => onNavigate('journal')}
+          onClick={() => onNavigate('reflect')}
           className="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-teal-300 text-xs font-medium border border-slate-600 transition cursor-pointer"
         >
           Write Entry

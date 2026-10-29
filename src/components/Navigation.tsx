@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Smile, BookOpen, Sparkles, MessageSquareHeart } from 'lucide-react';
+import { Home, BookOpen, Wind, Sparkles, MessageSquareHeart } from 'lucide-react';
 
-export type TabType = 'home' | 'mood' | 'journal' | 'affirmations' | 'kalise';
+export type TabType = 'home' | 'reflect' | 'calm' | 'affirmations' | 'kalise';
 
 interface Props {
   activeTab: TabType;
@@ -11,8 +11,8 @@ interface Props {
 export const Navigation: React.FC<Props> = ({ activeTab, onChangeTab }) => {
   const tabs = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'mood', label: 'Mood', icon: Smile },
-    { id: 'journal', label: 'Journal', icon: BookOpen },
+    { id: 'reflect', label: 'Reflect', icon: BookOpen },
+    { id: 'calm', label: 'Calm', icon: Wind },
     { id: 'affirmations', label: 'Affirmations', icon: Sparkles },
     { id: 'kalise', label: 'Kalise', icon: MessageSquareHeart },
   ] as const;
@@ -53,3 +53,4 @@ export const Navigation: React.FC<Props> = ({ activeTab, onChangeTab }) => {
     </nav>
   );
 };
+

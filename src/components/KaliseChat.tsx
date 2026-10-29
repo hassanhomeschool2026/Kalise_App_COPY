@@ -60,11 +60,6 @@ export const KaliseChat: React.FC<Props> = ({
   const [loadingAudioMsgId, setLoadingAudioMsgId] = useState<string | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Interactive Breathing Widget State
-  const [breathingActive, setBreathingActive] = useState(false);
-  const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold (In)' | 'Exhale' | 'Hold (Out)'>('Inhale');
-  const [breathCount, setBreathCount] = useState(4);
-
   const bypassPaywall = import.meta.env.VITE_BYPASS_PAYWALL === 'true';
   const crisisEvaluation = evaluateCrisisState(messages);
   const inCrisis = crisisEvaluation.crisisMode;
@@ -76,8 +71,6 @@ export const KaliseChat: React.FC<Props> = ({
     ? 'listening'
     : isLoading || loadingAudioMsgId !== null || playingMsgId !== null
     ? 'responding'
-    : breathingActive
-    ? 'breathing'
     : 'idle';
 
   useEffect(() => {
@@ -89,32 +82,6 @@ export const KaliseChat: React.FC<Props> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
-
-  // Breathing timer effect
-  useEffect(() => {
-    let timer: any;
-    if (breathingActive) {
-      timer = setInterval(() => {
-        setBreathCount((prev) => {
-          if (prev > 1) return prev - 1;
-          if (breathPhase === 'Inhale') {
-            setBreathPhase('Hold (In)');
-            return 4;
-          } else if (breathPhase === 'Hold (In)') {
-            setBreathPhase('Exhale');
-            return 4;
-          } else if (breathPhase === 'Exhale') {
-            setBreathPhase('Hold (Out)');
-            return 4;
-          } else {
-            setBreathPhase('Inhale');
-            return 4;
-          }
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [breathingActive, breathPhase]);
 
   const handleSpeak = async (msgId: string, text: string) => {
     if (playingMsgId === msgId) {
@@ -397,18 +364,6 @@ export const KaliseChat: React.FC<Props> = ({
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setBreathingActive(!breathingActive)}
-            className={`p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-medium border ${
-              breathingActive
-                ? 'bg-teal-500 text-slate-950 border-teal-400'
-                : 'bg-slate-800 text-teal-300 border-teal-500/30 hover:bg-slate-700'
-            }`}
-            title="Interactive Breathing Exercise"
-          >
-            <Wind className="w-4 h-4" />
-            <span className="hidden sm:inline">Breathe</span>
-          </button>
-          <button
             onClick={onClearChat}
             className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
             title="Clear conversation"
@@ -417,33 +372,6 @@ export const KaliseChat: React.FC<Props> = ({
           </button>
         </div>
       </div>
-
-      {/* Interactive Breathing / Grounding Active Widget Card */}
-      {breathingActive && (
-        <div className="mb-3 p-4 rounded-3xl bg-slate-900 border border-teal-500/40 text-center space-y-3 shadow-lg animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-teal-300 text-xs font-semibold">
-              <Wind className="w-4 h-4 animate-spin" />
-              <span>Calming Box Breathing Exercise</span>
-            </div>
-            <button
-              onClick={() => setBreathingActive(false)}
-              className="text-xs text-slate-400 hover:text-white cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-          <div className="py-4">
-            <div className="w-24 h-24 mx-auto rounded-full bg-teal-500/15 border-2 border-teal-400 flex flex-col items-center justify-center animate-serene-breathe shadow-inner">
-              <span className="text-sm font-bold text-teal-200">{breathPhase}</span>
-              <span className="text-xl font-mono font-bold text-white">{breathCount}s</span>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-300 max-w-xs mx-auto">
-            Follow the gentle cadence. Inhale as the circle expands, hold, exhale as it softens. You are safe right here.
-          </p>
-        </div>
-      )}
 
       {/* Free trial messages reminder */}
       {bypassPaywall ? (

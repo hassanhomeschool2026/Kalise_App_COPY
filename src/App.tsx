@@ -12,8 +12,8 @@ import {
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { HomeDashboard } from './components/HomeDashboard';
-import { MoodTracker } from './components/MoodTracker';
-import { JournalView } from './components/JournalView';
+import { ReflectView } from './components/ReflectView';
+import { CalmStudio } from './components/CalmStudio';
 import { AffirmationsView } from './components/AffirmationsView';
 import { KaliseChat } from './components/KaliseChat';
 import { MedicationsView } from './components/MedicationsView';
@@ -755,21 +755,20 @@ function KaliseMainApp() {
           />
         )}
 
-        {activeTab === 'mood' && (
-          <MoodTracker
+        {activeTab === 'reflect' && (
+          <ReflectView
             moods={moods}
+            entries={journals}
             onSaveMood={handleSaveMood}
             onDeleteMood={handleDeleteMood}
+            onSaveJournalEntry={handleSaveJournalEntry}
+            onDeleteJournalEntry={handleDeleteJournalEntry}
+            onShareWithKalise={handleShareJournalWithKalise}
           />
         )}
 
-        {activeTab === 'journal' && (
-          <JournalView
-            entries={journals}
-            onSaveEntry={handleSaveJournalEntry}
-            onDeleteEntry={handleDeleteJournalEntry}
-            onShareWithKalise={handleShareJournalWithKalise}
-          />
+        {activeTab === 'calm' && (
+          <CalmStudio />
         )}
 
         {activeTab === 'affirmations' && (
