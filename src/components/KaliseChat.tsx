@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall, Volume2, VolumeX, Wind, CheckSquare, Square, BookOpen } from 'lucide-react';
+import { Send, Sparkles, AlertCircle, Heart, Shield, RefreshCw, MessageSquareHeart, Lock, Mic, MicOff, ExternalLink, PhoneCall, Volume2, VolumeX, Wind, CheckSquare, Square, BookOpen, X } from 'lucide-react';
 import { ChatMessage, MoodEntry, UserSettings, JournalEntry } from '../types';
 import { evaluateCrisisState } from '../utils/crisisPhrases.js';
 
@@ -57,6 +57,14 @@ export const KaliseChat: React.FC<Props> = ({
   const crisisEvaluation = evaluateCrisisState(messages);
   const inCrisis = crisisEvaluation.crisisMode;
   const isFreeLimitReached = !inCrisis && !bypassPaywall && !settings.isPremium && settings.freeMessagesUsed >= 3;
+
+  const [isCrisisPillDismissed, setIsCrisisPillDismissed] = useState(false);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setIsCrisisPillDismissed(false);
+    }
+  }, [messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -452,9 +460,16 @@ export const KaliseChat: React.FC<Props> = ({
               </div>
 
               {/* Crisis safeguard trigger if response flagged crisis */}
-              {msg.isCrisis && inCrisis && msg === messages[messages.length - 1] && (
-                <div className="mt-2 max-w-[86%] p-3 rounded-2xl bg-slate-900/90 border border-teal-500/30 text-slate-200 text-xs shadow-md">
-                  <div className="flex items-center gap-1.5 font-semibold text-teal-300">
+              {msg.isCrisis && inCrisis && !isCrisisPillDismissed && msg === messages[messages.length - 1] && (
+                <div className="mt-2 max-w-[86%] p-3 rounded-2xl bg-slate-900/90 border border-teal-500/30 text-slate-200 text-xs shadow-md relative">
+                  <button
+                    onClick={() => setIsCrisisPillDismissed(true)}
+                    className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-100 p-1 rounded-lg transition cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="flex items-center gap-1.5 font-semibold text-teal-300 pr-5">
                     <Heart className="w-4 h-4 text-teal-400 fill-teal-400/20" />
                     <span>Support is always here</span>
                   </div>
