@@ -331,10 +331,22 @@ export const KaliseChat: React.FC<Props> = ({
             body: formData,
           });
 
-          const data = await response.json();
           if (!response.ok) {
-            throw new Error(data.message || 'Transcription failed');
+            console.error('Transcription request failed with status:', response.status);
+            let errorMessage = 'Transcription unavailable.';
+            try {
+              const data = await response.json();
+              errorMessage = data.message || errorMessage;
+            } catch {
+              // Silently ignore HTML parse failure
+            }
+            setAudioError(errorMessage);
+            setIsRecording(false);
+            setIsTranscribing(false);
+            return;
           }
+
+          const data = await response.json();
 
           if (data.text) {
             const transcribed = data.text;

@@ -261,7 +261,7 @@ app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, r
       return;
     }
     if (!req.file || !req.file.buffer) {
-      res.status(400).json({ error: 'NO_FILE', message: 'No audio file received.' });
+      res.status(400).json({ error: 'NO_AUDIO', message: 'No audio data received' });
       return;
     }
 
@@ -269,18 +269,28 @@ app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, r
       type: req.file.mimetype || 'audio/webm',
     });
 
-    const transcription = await openAiClient.audio.transcriptions.create({
-      file: file,
-      model: 'whisper-1',
-      language: 'en',
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
+    let transcription: any;
+    try {
+      transcription = await openAiClient.audio.transcriptions.create({
+        file: file,
+        model: 'whisper-1',
+        language: 'en',
+      }, {
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     res.json({ text: transcription.text });
   } catch (err: any) {
     console.error('Whisper transcription error:', err);
-    res.status(500).json({
+    res.status(502).json({
       error: 'TRANSCRIPTION_FAILED',
-      message: err?.message || 'Failed to transcribe audio'
+      message: 'Unable to transcribe audio right now. Please try again or type your message.'
     });
   }
 });
