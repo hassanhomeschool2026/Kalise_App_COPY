@@ -109,11 +109,20 @@ export const KaliseChat: React.FC<Props> = ({
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to generate speech');
+        console.error('Audio playback fetch failed with status:', response.status);
+        setLoadingAudioMsgId(null);
+        setPlayingMsgId(null);
+        return;
       }
 
       const blob = await response.blob();
+      if (blob.type !== 'audio/mpeg' && blob.size < 100) {
+        console.error('Invalid audio payload received');
+        setLoadingAudioMsgId(null);
+        setPlayingMsgId(null);
+        return;
+      }
+
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
       currentAudioRef.current = audio;
@@ -135,7 +144,6 @@ export const KaliseChat: React.FC<Props> = ({
         setLoadingAudioMsgId(null);
         currentAudioRef.current = null;
         URL.revokeObjectURL(audioUrl);
-        setAudioError('Playback failed. Please try again.');
       };
 
       await audio.play();
@@ -143,7 +151,6 @@ export const KaliseChat: React.FC<Props> = ({
       console.error('Cartesia speech playback error:', err);
       setLoadingAudioMsgId(null);
       setPlayingMsgId(null);
-      setAudioError(err?.message || 'Could not play voice message.');
     }
   };
 

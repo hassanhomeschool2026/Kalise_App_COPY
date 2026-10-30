@@ -268,6 +268,28 @@ app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, r
   }
 });
 
+const sanitizeTextForTts = (rawText: string): string => {
+  if (!rawText) return '';
+  // Strip markdown symbols *, **, #, _, >
+  let cleaned = rawText.replace(/[\*\#\_>]/g, '');
+  // Replace multiple newlines or whitespace with single spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  // If text exceeds 1,200 characters, safely slice to nearest sentence boundary
+  if (cleaned.length > 1200) {
+    const sliced = cleaned.substring(0, 1200);
+    const lastPeriod = sliced.lastIndexOf('.');
+    const lastQuestion = sliced.lastIndexOf('?');
+    const lastExclamation = sliced.lastIndexOf('!');
+    const bestBoundary = Math.max(lastPeriod, lastQuestion, lastExclamation);
+    if (bestBoundary > 200) {
+      cleaned = sliced.substring(0, bestBoundary + 1);
+    } else {
+      cleaned = sliced;
+    }
+  }
+  return cleaned;
+};
+
 // Cartesia Text-to-Speech endpoint
 app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -282,6 +304,8 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const sanitizedText = sanitizeTextForTts(text);
+
     const cartesiaRes = await fetch('https://api.cartesia.ai/tts/bytes', {
       method: 'POST',
       headers: {
@@ -291,7 +315,7 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
       },
       body: JSON.stringify({
         model_id: 'sonic-3.5',
-        transcript: text,
+        transcript: sanitizedText,
         voice: {
           mode: 'id',
           id: 'af346552-54bf-4c2b-a4d4-9d2820f51b6c', // Valerie
@@ -304,10 +328,10 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
       }),
     });
 
-    if (!cartesiaRes.ok) {
+    if (cartesiaRes.status !== 200) {
       const errText = await cartesiaRes.text();
-      console.error('Cartesia TTS error:', cartesiaRes.status, errText);
-      res.status(502).json({ error: 'TTS_FAILED', message: `Cartesia API error: ${errText}` });
+      console.error('Cartesia TTS error status:', cartesiaRes.status, 'body:', errText);
+      res.status(502).json({ error: 'TTS_FAILED', message: 'Cartesia audio generation failed' });
       return;
     }
 
