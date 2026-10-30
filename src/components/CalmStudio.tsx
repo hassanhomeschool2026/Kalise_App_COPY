@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Wind, Volume2, VolumeX, Sparkles, Eye, Hand, Check, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
-import { KaliseOrb } from './KaliseOrb';
+import { Wind, Volume2, VolumeX, Sparkles, Eye, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
+import { KaliseOrb, BreathPhase as OrbBreathPhase } from './KaliseOrb';
 
 type Modality = 'box' | 'rest' | 'grounding';
 type BreathPhase = 'Inhale' | 'Hold (In)' | 'Exhale' | 'Hold (Out)';
@@ -17,7 +17,6 @@ export const CalmStudio: React.FC = () => {
 
   // Grounding state
   const [groundingStep, setGroundingStep] = useState(0);
-  const [groundingInput, setGroundingInput] = useState('');
   const [groundingNotes, setGroundingNotes] = useState<string[]>(Array(5).fill(''));
 
   // Web Audio API synthesizer tone generator for eyes-closed audio guidance
@@ -39,10 +38,10 @@ export const CalmStudio: React.FC = () => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      let freq = 432; // Default calming frequency (A4 = 432Hz or similar)
-      if (type === 'inhale') freq = 528; // Solfeggio healing / rising
-      else if (type === 'hold') freq = 396; // Grounding tone
-      else if (type === 'exhale') freq = 285; // Deep release
+      let freq = 432;
+      if (type === 'inhale') freq = 528;
+      else if (type === 'hold') freq = 396;
+      else if (type === 'exhale') freq = 285;
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
@@ -61,9 +60,6 @@ export const CalmStudio: React.FC = () => {
     }
   };
 
-  // Breathing schedule definitions
-  // Box: Inhale 4, Hold 4, Exhale 4, Hold 4
-  // Rest (4-7-8): Inhale 4, Hold 7, Exhale 8
   const getDurations = () => {
     if (modality === 'box') {
       return { inhale: 4, holdIn: 4, exhale: 4, holdOut: 4 };
@@ -88,7 +84,6 @@ export const CalmStudio: React.FC = () => {
       timer = setInterval(() => {
         setSecondsInPhase((prev) => {
           if (prev + 1 >= currentMax) {
-            // Transition to next phase
             let nextPhase: BreathPhase = 'Inhale';
             if (modality === 'box') {
               if (phase === 'Inhale') nextPhase = 'Hold (In)';
@@ -99,7 +94,6 @@ export const CalmStudio: React.FC = () => {
                 setCycleCount((c) => c + 1);
               }
             } else {
-              // 4-7-8
               if (phase === 'Inhale') nextPhase = 'Hold (In)';
               else if (phase === 'Hold (In)') nextPhase = 'Exhale';
               else {
@@ -108,7 +102,6 @@ export const CalmStudio: React.FC = () => {
               }
             }
 
-            // Trigger audio cue
             if (nextPhase === 'Inhale') playChime('inhale');
             else if (nextPhase === 'Hold (In)') playChime('hold');
             else if (nextPhase === 'Exhale') playChime('exhale');
@@ -127,9 +120,29 @@ export const CalmStudio: React.FC = () => {
     if (!isRunning) {
       setPhase('Inhale');
       setSecondsInPhase(0);
+      setCycleCount(1);
       playChime('inhale');
     }
     setIsRunning(!isRunning);
+  };
+
+  // Map phase and duration for KaliseOrb
+  const getOrbBreathPhase = (): OrbBreathPhase => {
+    if (!isRunning) return 'idle';
+    if (phase === 'Inhale') return 'inhale';
+    if (phase === 'Hold (In)') return 'hold';
+    if (phase === 'Exhale') return 'exhale';
+    if (phase === 'Hold (Out)') return 'holdOut';
+    return 'idle';
+  };
+
+  const getOrbDuration = (): number => {
+    const durations = getDurations();
+    if (phase === 'Inhale') return durations.inhale;
+    if (phase === 'Hold (In)') return durations.holdIn;
+    if (phase === 'Exhale') return durations.exhale;
+    if (phase === 'Hold (Out)') return durations.holdOut;
+    return 4;
   };
 
   const groundingSteps = [
@@ -321,16 +334,18 @@ export const CalmStudio: React.FC = () => {
               {modality === 'box' ? 'Box Breathing (4-4-4-4)' : 'Deep Rest (4-7-8)'}
             </span>
 
-            {/* Kalise Orb Hero Size */}
-            <div className="py-6">
+            {/* Kalise Orb Hero Size with exact phase synchronicity */}
+            <div className="py-6 flex items-center justify-center">
               <KaliseOrb
                 state={isRunning ? 'breathing' : 'idle'}
                 size="hero"
+                breathPhase={getOrbBreathPhase()}
+                duration={getOrbDuration()}
               />
             </div>
 
             <div className="space-y-1">
-              <h2 className="text-2xl font-bold font-serif text-slate-100 tracking-tight">
+              <h2 className="text-2xl font-bold font-serif text-slate-100 tracking-tight capitalize">
                 {isRunning ? phase : 'Ready to begin'}
               </h2>
               <p className="text-xs text-slate-400 font-mono">
