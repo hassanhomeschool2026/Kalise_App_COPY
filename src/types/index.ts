@@ -118,6 +118,9 @@ export interface UserProfile {
   id: string; // auth.users id
   preferredName: string;
   email?: string;
+  country?: string;
+  stateRegion?: string | null;
+  primaryIntent?: string;
   createdAt: string;
   updatedAt: string;
 }

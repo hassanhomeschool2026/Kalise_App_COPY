@@ -682,6 +682,9 @@ export const remoteDbService = {
         id: data.id,
         preferredName: data.preferred_name || 'Friend',
         email: data.email,
+        country: data.country || 'United States',
+        stateRegion: data.state_region || null,
+        primaryIntent: data.primary_intent || null,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };

@@ -81,7 +81,10 @@ HOW TO ENGAGE WITH REAL ISSUES:
 BOUNDARIES & ETHICS:
 - You are an AI and do not pretend to be human, a doctor, or a licensed therapist.
 - Do not make clinical diagnoses of medical/psychiatric disorders.
-- Never abandon the user. You care enough about their peace to tell them the truth kindly and thoroughly.`;
+- Never abandon the user. You care enough about their peace to tell them the truth kindly and thoroughly.
+
+WEB SEARCH USAGE RULE:
+- Only invoke web_search when a user's question genuinely requires external real-world factual verification (e.g., specific legal regulations, local crisis centers, medical definitions, or current public events). Do NOT invoke web search for emotional venting, personal advice, humor, or general conversation.`;
 
 // Crisis fallback response
 const CRISIS_RESPONSE = {
@@ -99,7 +102,7 @@ const CRISIS_RESPONSE = {
 // Chat API endpoint using OpenAI Responses API
 app.post('/api/kalise/chat', async (req: Request, res: Response) => {
   try {
-    const { messages, currentMood, energyLevel, sleepQuality, moods, journals, medications } = req.body;
+    const { messages, currentMood, energyLevel, sleepQuality, country, stateRegion, state_region, moods, journals, medications } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'Messages array is required.' });
@@ -131,6 +134,12 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
       }
       if (sleepQuality) {
         contextualPrompt += `[User's logged sleep quality: ${sleepQuality}] `;
+      }
+
+      const reg = stateRegion || state_region;
+      if (country) {
+        const locStr = `${reg ? reg + ', ' : ''}${country}`;
+        contextualPrompt += `[User Location: ${locStr}] `;
       }
 
       if (relevantPatterns.length > 0) {
@@ -193,12 +202,11 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
         return;
       }
 
-      const isComplex = /\b(plan|how|why|research|compare|housing|legal|money|work|conflict|breakup|decision|analyze|help me figure out)\b/i.test(userText) || userText.length > 200;
-      const reasoningEffort = crisisMode ? 'medium' : (isComplex ? 'high' : 'medium');
+      const reasoningEffort = 'medium';
       response = await openAiClient.responses.create({
         model: OPENAI_MODEL,
         input: inputList,
-        tools: [{ type: 'web_search' }],
+        tools: [{ type: 'web_search', search_context_size: 'low' }],
         reasoning: { effort: reasoningEffort },
         max_output_tokens: 4000,
       }, {
@@ -254,44 +262,22 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
 });
 
 // Audio transcription endpoint using OpenAI Whisper API
-app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, res: Response): Promise<void> => {
+app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, res: Response) => {
   try {
     if (!openAiClient) {
-      res.status(503).json({ error: 'AI_UNAVAILABLE', message: 'OpenAI client not configured.' });
-      return;
+      return res.status(503).json({ error: 'AI_UNAVAILABLE', message: 'OpenAI client not configured.' });
     }
-    if (!req.file || !req.file.buffer) {
-      res.status(400).json({ error: 'NO_AUDIO', message: 'No audio data received' });
-      return;
+    if (!req.file) {
+      return res.status(400).json({ error: 'NO_FILE', message: 'No audio file received' });
     }
-
-    const file = await toFile(req.file.buffer, req.file.originalname || 'recording.webm', {
-      type: req.file.mimetype || 'audio/webm',
+    const transcription = await openAiClient.audio.transcriptions.create({
+      file: await OpenAI.toFile(req.file.buffer, 'recording.webm'),
+      model: 'whisper-1',
     });
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
-
-    let transcription: any;
-    try {
-      transcription = await openAiClient.audio.transcriptions.create({
-        file: file,
-        model: 'whisper-1',
-        language: 'en',
-      }, {
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    res.json({ text: transcription.text });
+    return res.json({ text: transcription.text });
   } catch (err: any) {
-    console.error('Whisper transcription error:', err);
-    res.status(502).json({
-      error: 'TRANSCRIPTION_FAILED',
-      message: 'Unable to transcribe audio right now. Please try again or type your message.'
-    });
+    console.error('Whisper transcribe error:', err);
+    return res.status(500).json({ error: 'TRANSCRIBE_ERROR', message: 'Transcription failed' });
   }
 });
 

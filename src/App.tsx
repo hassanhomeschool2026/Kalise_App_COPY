@@ -8,6 +8,7 @@ import {
   UserSettings,
   Medication,
   MedicationLog,
+  UserProfile,
 } from './types';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
@@ -48,6 +49,7 @@ function KaliseMainApp() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [showAuthScreen, setShowAuthScreen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // App Navigation & Modals
   const [activeTab, setActiveTab] = useState<TabType>('home');
@@ -124,6 +126,7 @@ function KaliseMainApp() {
       );
 
       const profile = await remoteDbService.getProfile(user.id);
+      if (profile) setUserProfile(profile);
       const prefs = await remoteDbService.getPreferences(user.id);
 
       const preferredName = profile?.preferredName || initialName;
@@ -585,6 +588,8 @@ function KaliseMainApp() {
             currentMood: latestMood?.label,
             energyLevel: latestMood?.energyLevel,
             sleepQuality: latestMood?.sleepQuality,
+            country: userProfile?.country,
+            stateRegion: userProfile?.stateRegion,
             moods: storageService.getMoods(userId),
             journals: storageService.getJournalEntries(userId).slice(0, 5),
             medications: storageService.getMedications(userId),
@@ -720,8 +725,13 @@ function KaliseMainApp() {
   if (showOnboarding) {
     return (
       <OnboardingFlow
-        userName={settings.userName}
-        onComplete={handleOnboardingComplete}
+        user={session?.user || null}
+        onComplete={async () => {
+          setShowOnboarding(false);
+          if (session?.user) {
+            await loadUserDataForUser(session.user);
+          }
+        }}
       />
     );
   }
