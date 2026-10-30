@@ -326,8 +326,8 @@ export const CalmStudio: React.FC = () => {
         </div>
       ) : (
         /* Breathing Engine with KaliseOrb */
-        <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-6 shadow-xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 via-slate-900 to-indigo-500/10 pointer-events-none" />
+        <div className="p-8 rounded-3xl bg-gradient-to-b from-slate-900/90 via-slate-900/95 to-slate-950/95 border border-slate-800/80 text-center space-y-6 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 via-slate-900/40 to-indigo-500/10 pointer-events-none" />
 
           <div className="relative z-10 flex flex-col items-center justify-center space-y-4">
             <span className="text-[11px] uppercase tracking-widest text-teal-400 font-semibold">

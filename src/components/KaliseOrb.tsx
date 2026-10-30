@@ -26,7 +26,7 @@ export const KaliseOrb: React.FC<KaliseOrbProps> = ({
   breathPhase,
   duration = 4,
 }) => {
-  const { container, dimension } = sizeMap[size] || sizeMap.md;
+  const { container } = sizeMap[size] || sizeMap.md;
   const [imgErrorIndex, setImgErrorIndex] = useState(0);
 
   // Asset selection: breathing state uses Kalise_Breathing.png, others use Official_KaliseOrb.png
@@ -34,205 +34,98 @@ export const KaliseOrb: React.FC<KaliseOrbProps> = ({
   const fallbackSources = [primaryImgSrc, '/kalise-orb.png'];
   const currentImgSrc = fallbackSources[imgErrorIndex];
 
-  // Exact breathing phase scale and luminous glow rules:
-  // 'inhale': scale expands from 1.0 to 1.35 and glow expands smoothly over duration
-  // 'hold': scale frozen at 1.35 and glow frozen at peak intensity
-  // 'exhale': scale contracts from 1.35 down to 1.0 and glow contracts smoothly over duration
-  // 'holdOut': scale and glow frozen at resting state
-  let targetScale = 'scale(1.0)';
-  let targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
-  let transitionRule = 'none';
+  // Precise scale & glow per breath phase:
+  // - inhale: scale 0.85 to 1.30, glow 15px to 45px, opacity 0.35 to 0.75
+  // - hold: frozen at scale 1.30, glow 45px, opacity 0.75 (zero movement)
+  // - exhale: scale 1.30 down to 0.85, glow 45px to 15px, opacity 0.75 to 0.35
+  // - holdOut: frozen at scale 0.85, glow 15px, opacity 0.35 (zero movement)
+  let currentScale = 1.0;
+  let currentGlowRadius = 15;
+  let currentGlowOpacity = 0.35;
+  let transitionDuration = duration;
+  let isFrozen = false;
 
   if (breathPhase === 'inhale') {
-    targetScale = 'scale(1.35)';
-    targetFilter = 'drop-shadow(0 0 25px rgba(196, 168, 224, 0.6)) drop-shadow(0 0 50px rgba(94, 234, 212, 0.4))';
-    transitionRule = `transform ${duration}s ease-in-out, filter ${duration}s ease-in-out`;
+    currentScale = 1.30;
+    currentGlowRadius = 45;
+    currentGlowOpacity = 0.75;
+    transitionDuration = duration;
+    isFrozen = false;
   } else if (breathPhase === 'hold') {
-    targetScale = 'scale(1.35)';
-    targetFilter = 'drop-shadow(0 0 25px rgba(196, 168, 224, 0.6)) drop-shadow(0 0 50px rgba(94, 234, 212, 0.4))';
-    transitionRule = 'none'; // Strictly frozen at peak intensity, zero jitter
+    currentScale = 1.30;
+    currentGlowRadius = 45;
+    currentGlowOpacity = 0.75;
+    transitionDuration = 0;
+    isFrozen = true;
   } else if (breathPhase === 'exhale') {
-    targetScale = 'scale(1.0)';
-    targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
-    transitionRule = `transform ${duration}s ease-in-out, filter ${duration}s ease-in-out`;
+    currentScale = 0.85;
+    currentGlowRadius = 15;
+    currentGlowOpacity = 0.35;
+    transitionDuration = duration;
+    isFrozen = false;
   } else if (breathPhase === 'holdOut') {
-    targetScale = 'scale(1.0)';
-    targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
-    transitionRule = 'none'; // Strictly frozen at resting state
+    currentScale = 0.85;
+    currentGlowRadius = 15;
+    currentGlowOpacity = 0.35;
+    transitionDuration = 0;
+    isFrozen = true;
+  } else {
+    currentScale = 1.0;
+    currentGlowRadius = 20;
+    currentGlowOpacity = 0.45;
+    transitionDuration = 0.7;
+    isFrozen = false;
   }
 
-  const isBreathingActive = breathPhase && breathPhase !== 'idle';
-
-  const inlineTransformStyle = isBreathingActive
-    ? {
-        transform: targetScale,
-        filter: targetFilter,
-        transition: transitionRule,
-        willChange: 'transform, filter',
-      }
-    : { willChange: 'transform, filter' };
+  const isHoldingOrInhaling = breathPhase === 'inhale' || breathPhase === 'hold';
 
   return (
-    <div className={`relative flex items-center justify-center shrink-0 ${container} ${className}`}>
-      {/* Backdrop Radial Glow with Lavender, Soft Teal, and Golden Pearl */}
-      <div
-        className={`absolute inset-0 rounded-full blur-2xl pointer-events-none transition-all duration-700 ${
-          breathPhase === 'inhale' || breathPhase === 'hold' ? 'scale-150 opacity-90' : 'scale-100 opacity-60'
-        }`}
+    <div 
+      className={`relative flex items-center justify-center shrink-0 p-4 ${container} ${className}`}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+      }}
+    >
+      {/* Ambient Dynamic Radial Backlight */}
+      <div 
+        className="absolute inset-0 rounded-full blur-3xl pointer-events-none ease-in-out"
         style={{
-          background: 'radial-gradient(circle, rgba(94,234,212,0.35) 0%, rgba(196,168,224,0.45) 50%, rgba(251,191,36,0.25) 100%)',
+          transitionDuration: isFrozen ? '0s' : `${transitionDuration}s`,
+          background: isHoldingOrInhaling 
+            ? 'radial-gradient(circle, rgba(196,168,224,0.45) 0%, rgba(94,234,212,0.25) 50%, transparent 75%)' 
+            : 'radial-gradient(circle, rgba(196,168,224,0.18) 0%, rgba(94,234,212,0.1) 45%, transparent 70%)',
+          transform: `scale(${currentScale * 1.25})`,
         }}
       />
 
-      {/* Hardware-accelerated container with synchronized scale, filter glow, and circular crop */}
+      {/* The Breathing 3D PNG Orb with zero square bounding box */}
       <div
-        className="relative z-10 flex items-center justify-center w-full h-full rounded-full overflow-hidden shadow-md"
-        style={inlineTransformStyle}
+        className="relative z-10 flex items-center justify-center w-full h-full rounded-full"
+        style={{
+          background: 'transparent',
+          border: 'none',
+          boxShadow: 'none',
+        }}
       >
         {imgErrorIndex < fallbackSources.length ? (
           <img
             src={currentImgSrc}
-            alt="Kalise Orb"
+            alt="Kalise Breathing Orb"
             onError={() => setImgErrorIndex((prev) => prev + 1)}
-            className="w-full h-full object-cover rounded-full pointer-events-none drop-shadow-xl"
+            className="w-full h-full object-contain pointer-events-none ease-in-out"
+            style={{
+              transitionDuration: isFrozen ? '0s' : `${transitionDuration}s`,
+              transform: `scale(${currentScale})`,
+              filter: `drop-shadow(0 0 ${currentGlowRadius}px rgba(196, 168, 224, ${currentGlowOpacity})) drop-shadow(0 0 ${currentGlowRadius * 1.8}px rgba(94, 234, 212, 0.35))`,
+              willChange: 'transform, filter',
+            }}
           />
         ) : (
-          <svg
-            width={dimension}
-            height={dimension}
-            viewBox="0 0 100 100"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={`drop-shadow-lg rounded-full ${
-              isBreathingActive
-                ? ''
-                : state === 'listening'
-                ? 'animate-orb-listening'
-                : state === 'responding'
-                ? 'animate-orb-responding'
-                : state === 'breathing'
-                ? ''
-                : 'animate-orb-idle'
-            }`}
-          >
-            <defs>
-              <radialGradient id="sphere-base" cx="30%" cy="30%" r="70%">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
-                <stop offset="35%" stopColor="#5EEAD4" stopOpacity="0.7" />
-                <stop offset="70%" stopColor="#C4A8E0" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="#4338CA" stopOpacity="0.8" />
-              </radialGradient>
-
-              <linearGradient id="ribbon-teal" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#5EEAD4" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#4338CA" stopOpacity="0.2" />
-              </linearGradient>
-
-              <linearGradient id="ribbon-lavender" x1="100%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#C4A8E0" stopOpacity="0.8" />
-                <stop offset="100%" stopColor="#5EEAD4" stopOpacity="0.4" />
-              </linearGradient>
-
-              <radialGradient id="specular" cx="25%" cy="25%" r="40%">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
-                <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-              </radialGradient>
-
-              <filter id="glass-glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
-
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              stroke="url(#ribbon-teal)"
-              strokeWidth="1.5"
-              strokeOpacity="0.4"
-              fill="none"
-            />
-
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="url(#sphere-base)"
-              filter="url(#glass-glow)"
-            />
-
-            <g className={state === 'responding' ? 'animate-spin-slow' : 'animate-drift'} style={{ transformOrigin: '50px 50px' }}>
-              <path
-                d="M20 50C20 30 40 25 60 35C80 45 85 70 65 80C45 90 20 70 20 50Z"
-                fill="url(#ribbon-lavender)"
-                opacity="0.65"
-                className="mix-blend-overlay"
-              />
-              <path
-                d="M30 30C50 20 70 40 75 60C80 80 55 85 40 70C25 55 10 40 30 30Z"
-                fill="url(#ribbon-teal)"
-                opacity="0.5"
-                className="mix-blend-screen"
-              />
-            </g>
-
-            <circle
-              cx="50"
-              cy="50"
-              r="25"
-              fill="#FFFFFF"
-              opacity="0.25"
-              className="animate-pulse"
-            />
-
-            <circle
-              cx="38"
-              cy="38"
-              r="38"
-              fill="url(#specular)"
-            />
-          </svg>
+          <div className="w-full h-full rounded-full bg-teal-500/20" />
         )}
       </div>
-
-      <style>{`
-        @keyframes orbIdle {
-          0%, 100% { transform: scale(0.98); }
-          50% { transform: scale(1.02); }
-        }
-        @keyframes orbListening {
-          0%, 100% { transform: scale(1); filter: brightness(1); }
-          25% { transform: scale(1.06); filter: brightness(1.2); }
-          50% { transform: scale(0.97); filter: brightness(0.95); }
-          75% { transform: scale(1.04); filter: brightness(1.15); }
-        }
-        @keyframes orbResponding {
-          0% { transform: scale(1) rotate(0deg); filter: brightness(1.15); }
-          50% { transform: scale(1.05) rotate(180deg); filter: brightness(1.3); }
-          100% { transform: scale(1) rotate(360deg); filter: brightness(1.15); }
-        }
-        @keyframes drift {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .animate-orb-idle {
-          animation: orbIdle 4s ease-in-out infinite;
-        }
-        .animate-orb-listening {
-          animation: orbListening 1.5s ease-in-out infinite;
-        }
-        .animate-orb-responding {
-          animation: orbResponding 6s linear infinite;
-        }
-        .animate-drift {
-          animation: drift 12s linear infinite;
-        }
-        .animate-spin-slow {
-          animation: orbResponding 4s linear infinite;
-        }
-      `}</style>
     </div>
   );
 };
