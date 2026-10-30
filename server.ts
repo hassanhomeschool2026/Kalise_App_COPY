@@ -4,10 +4,16 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import OpenAI, { toFile } from 'openai';
 import multer from 'multer';
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import { analyzePatterns, selectRelevantPatterns } from './src/utils/patternEngine.js';
 import { STRONG_PHRASES, SOFT_PHRASES, normalizeText, evaluateCrisisState } from './src/utils/crisisPhrases.js';
 
 dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAdmin = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -270,19 +276,15 @@ app.post('/api/audio/transcribe', upload.single('audio'), async (req: Request, r
 
 const sanitizeTextForTts = (rawText: string): string => {
   if (!rawText) return '';
-  // Strip markdown symbols *, **, #, _, >
+  // Strip markdown characters **, *, #, _, >
   let cleaned = rawText.replace(/[\*\#\_>]/g, '');
-  // Replace multiple newlines or whitespace with single spaces
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  // If text exceeds 1,200 characters, safely slice to nearest sentence boundary
-  if (cleaned.length > 1200) {
-    const sliced = cleaned.substring(0, 1200);
-    const lastPeriod = sliced.lastIndexOf('.');
-    const lastQuestion = sliced.lastIndexOf('?');
-    const lastExclamation = sliced.lastIndexOf('!');
-    const bestBoundary = Math.max(lastPeriod, lastQuestion, lastExclamation);
-    if (bestBoundary > 200) {
-      cleaned = sliced.substring(0, bestBoundary + 1);
+  // Smart Cap: Truncate transcript to first 2-3 complete sentences (maximum 400 characters)
+  if (cleaned.length > 400) {
+    const sliced = cleaned.substring(0, 400);
+    const matches = sliced.match(/[^.!?]+[.!?]+/g);
+    if (matches && matches.length > 0) {
+      cleaned = matches.slice(0, 3).join(' ').trim();
     } else {
       cleaned = sliced;
     }
@@ -290,7 +292,7 @@ const sanitizeTextForTts = (rawText: string): string => {
   return cleaned;
 };
 
-// Cartesia Text-to-Speech endpoint
+// Cartesia Text-to-Speech endpoint with Supabase Storage Cache
 app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void> => {
   try {
     const { text } = req.body;
@@ -304,8 +306,29 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const sanitizedText = sanitizeTextForTts(text);
+    const cleanText = sanitizeTextForTts(text);
+    const hash = crypto.createHash('md5').update(cleanText).digest('hex');
+    const cachePath = `${hash}.mp3`;
 
+    // 1. Check Supabase Storage cache bucket 'kalise-voice-cache'
+    if (supabaseAdmin) {
+      try {
+        const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+          .from('kalise-voice-cache')
+          .download(cachePath);
+
+        if (!downloadError && fileData) {
+          const arrayBuf = await fileData.arrayBuffer();
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.send(Buffer.from(arrayBuf));
+          return;
+        }
+      } catch (cacheErr) {
+        console.warn('Supabase voice cache lookup note:', cacheErr);
+      }
+    }
+
+    // 2. Call Cartesia API
     const cartesiaRes = await fetch('https://api.cartesia.ai/tts/bytes', {
       method: 'POST',
       headers: {
@@ -315,7 +338,7 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
       },
       body: JSON.stringify({
         model_id: 'sonic-3.5',
-        transcript: sanitizedText,
+        transcript: cleanText,
         voice: {
           mode: 'id',
           id: 'af346552-54bf-4c2b-a4d4-9d2820f51b6c', // Valerie
@@ -331,13 +354,28 @@ app.post('/api/audio/speech', async (req: Request, res: Response): Promise<void>
     if (cartesiaRes.status !== 200) {
       const errText = await cartesiaRes.text();
       console.error('Cartesia TTS error status:', cartesiaRes.status, 'body:', errText);
-      res.status(502).json({ error: 'TTS_FAILED', message: 'Cartesia audio generation failed' });
+      res.status(502).json({ error: 'VOICE_LIMIT', message: 'Cartesia voice credits unavailable.' });
       return;
     }
 
-    res.setHeader('Content-Type', 'audio/mpeg');
     const arrayBuffer = await cartesiaRes.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
+    const mp3Buffer = Buffer.from(arrayBuffer);
+
+    // 3. Upload asynchronously to Supabase Storage cache
+    if (supabaseAdmin) {
+      supabaseAdmin.storage
+        .from('kalise-voice-cache')
+        .upload(cachePath, mp3Buffer, {
+          contentType: 'audio/mpeg',
+          upsert: true,
+        })
+        .catch((uploadErr) => {
+          console.warn('Could not store audio in Supabase voice cache:', uploadErr);
+        });
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.send(mp3Buffer);
   } catch (err: any) {
     console.error('Cartesia speech generation exception:', err);
     res.status(500).json({

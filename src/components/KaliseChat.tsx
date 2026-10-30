@@ -108,15 +108,47 @@ export const KaliseChat: React.FC<Props> = ({
         body: JSON.stringify({ text }),
       });
 
-      if (!response.ok) {
-        console.error('Audio playback fetch failed with status:', response.status);
+      const contentType = response.headers.get('content-type');
+
+      if (!response.ok || !contentType || !contentType.includes('audio/mpeg')) {
+        let errMessage = 'Voice generation unavailable';
+        if (contentType && contentType.includes('application/json')) {
+          const errData = await response.json().catch(() => ({}));
+          errMessage = errData.message || errMessage;
+        } else {
+          const textBody = await response.text().catch(() => '');
+          console.warn('Non-audio error response from speech endpoint:', response.status, textBody.substring(0, 150));
+        }
+
+        console.warn('Cartesia voice unavailable, falling back to browser speech synthesis:', errMessage);
+
+        // Seamless fallback to browser native window.speechSynthesis
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.onstart = () => {
+            setLoadingAudioMsgId(null);
+            setPlayingMsgId(msgId);
+          };
+          utterance.onend = () => {
+            setLoadingAudioMsgId(null);
+            setPlayingMsgId(null);
+          };
+          utterance.onerror = () => {
+            setLoadingAudioMsgId(null);
+            setPlayingMsgId(null);
+          };
+          window.speechSynthesis.speak(utterance);
+          return;
+        }
+
         setLoadingAudioMsgId(null);
         setPlayingMsgId(null);
         return;
       }
 
       const blob = await response.blob();
-      if (blob.type !== 'audio/mpeg' && blob.size < 100) {
+      if (blob.size < 100) {
         console.error('Invalid audio payload received');
         setLoadingAudioMsgId(null);
         setPlayingMsgId(null);
