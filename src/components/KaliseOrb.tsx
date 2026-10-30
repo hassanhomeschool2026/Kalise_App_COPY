@@ -34,58 +34,57 @@ export const KaliseOrb: React.FC<KaliseOrbProps> = ({
   const fallbackSources = [primaryImgSrc, '/kalise-orb.png'];
   const currentImgSrc = fallbackSources[imgErrorIndex];
 
-  let glowColor = 'from-teal-400/30 via-indigo-500/20 to-lavender-500/10';
-
-  if (state === 'listening' || breathPhase === 'inhale') {
-    glowColor = 'from-rose-400/40 via-teal-400/30 to-indigo-500/30';
-  } else if (state === 'responding') {
-    glowColor = 'from-teal-300/50 via-indigo-400/40 to-purple-500/30';
-  } else if (state === 'breathing' || breathPhase) {
-    glowColor = 'from-teal-400/40 via-indigo-500/30 to-lavender-400/20';
-  }
-
-  // Exact breathing phase scale rules:
-  // 'inhale': scale expands from 1.0 to 1.35 smoothly over duration
-  // 'hold': scale frozen at 1.35 with zero movement or wobbling
-  // 'exhale': scale contracts from 1.35 down to 1.0 smoothly over duration
-  // 'holdOut': scale frozen at 1.0
+  // Exact breathing phase scale and luminous glow rules:
+  // 'inhale': scale expands from 1.0 to 1.35 and glow expands smoothly over duration
+  // 'hold': scale frozen at 1.35 and glow frozen at peak intensity
+  // 'exhale': scale contracts from 1.35 down to 1.0 and glow contracts smoothly over duration
+  // 'holdOut': scale and glow frozen at resting state
   let targetScale = 'scale(1.0)';
+  let targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
   let transitionRule = 'none';
 
   if (breathPhase === 'inhale') {
     targetScale = 'scale(1.35)';
-    transitionRule = `transform ${duration}s ease-in-out`;
+    targetFilter = 'drop-shadow(0 0 25px rgba(196, 168, 224, 0.6)) drop-shadow(0 0 50px rgba(94, 234, 212, 0.4))';
+    transitionRule = `transform ${duration}s ease-in-out, filter ${duration}s ease-in-out`;
   } else if (breathPhase === 'hold') {
     targetScale = 'scale(1.35)';
-    transitionRule = 'none'; // Strictly frozen, zero wobble
+    targetFilter = 'drop-shadow(0 0 25px rgba(196, 168, 224, 0.6)) drop-shadow(0 0 50px rgba(94, 234, 212, 0.4))';
+    transitionRule = 'none'; // Strictly frozen at peak intensity, zero jitter
   } else if (breathPhase === 'exhale') {
     targetScale = 'scale(1.0)';
-    transitionRule = `transform ${duration}s ease-in-out`;
+    targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
+    transitionRule = `transform ${duration}s ease-in-out, filter ${duration}s ease-in-out`;
   } else if (breathPhase === 'holdOut') {
     targetScale = 'scale(1.0)';
-    transitionRule = 'none'; // Strictly frozen
+    targetFilter = 'drop-shadow(0 0 10px rgba(196, 168, 224, 0.3))';
+    transitionRule = 'none'; // Strictly frozen at resting state
   }
 
   const isBreathingActive = breathPhase && breathPhase !== 'idle';
 
   const inlineTransformStyle = isBreathingActive
     ? {
-        transform: targetScale === 'scale(1.35)' ? 'scale(1.35)' : 'scale(1.0)',
+        transform: targetScale,
+        filter: targetFilter,
         transition: transitionRule,
-        willChange: 'transform',
+        willChange: 'transform, filter',
       }
-    : { willChange: 'transform' };
+    : { willChange: 'transform, filter' };
 
   return (
     <div className={`relative flex items-center justify-center shrink-0 ${container} ${className}`}>
-      {/* Backdrop Radial Glow */}
+      {/* Backdrop Radial Glow with Lavender, Soft Teal, and Golden Pearl */}
       <div
-        className={`absolute inset-0 rounded-full blur-xl opacity-70 bg-gradient-to-tr ${glowColor} pointer-events-none transition-all duration-700 ${
-          breathPhase === 'inhale' || breathPhase === 'hold' ? 'scale-125' : 'scale-100'
+        className={`absolute inset-0 rounded-full blur-2xl pointer-events-none transition-all duration-700 ${
+          breathPhase === 'inhale' || breathPhase === 'hold' ? 'scale-150 opacity-90' : 'scale-100 opacity-60'
         }`}
+        style={{
+          background: 'radial-gradient(circle, rgba(94,234,212,0.35) 0%, rgba(196,168,224,0.45) 50%, rgba(251,191,36,0.25) 100%)',
+        }}
       />
 
-      {/* Hardware-accelerated container with strict phase rules and circular crop */}
+      {/* Hardware-accelerated container with synchronized scale, filter glow, and circular crop */}
       <div
         className="relative z-10 flex items-center justify-center w-full h-full rounded-full overflow-hidden shadow-md"
         style={inlineTransformStyle}
