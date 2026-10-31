@@ -588,6 +588,7 @@ function KaliseMainApp() {
             currentMood: latestMood?.label,
             energyLevel: latestMood?.energyLevel,
             sleepQuality: latestMood?.sleepQuality,
+            preferred_name: userProfile?.preferredName || settings.userName,
             country: userProfile?.country,
             stateRegion: userProfile?.stateRegion,
             moods: storageService.getMoods(userId),

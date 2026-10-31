@@ -474,26 +474,26 @@ export const authService = {
         'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
       );
     }
+    const trimmedEmail = email.trim();
     const redirectUrl =
       typeof window !== 'undefined'
-        ? `${window.location.origin}${window.location.pathname}`
+        ? `${window.location.origin}/`
         : undefined;
 
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
+      email: trimmedEmail,
+      password: password,
       options: {
-        emailRedirectTo: redirectUrl,
         data: {
           app_id: 'kalise',
-          app_name: 'Kalise',
-          preferred_name: preferredName.trim() || 'Friend',
+          preferred_name: preferredName.trim() || trimmedEmail.split('@')[0],
         },
+        emailRedirectTo: redirectUrl,
       },
     });
 
     if (error) {
-      console.error('Supabase signUp error:', error);
+      console.error('Supabase signUp error message:', error.message);
       throw error;
     }
 

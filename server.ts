@@ -102,7 +102,7 @@ const CRISIS_RESPONSE = {
 // Chat API endpoint using OpenAI Responses API
 app.post('/api/kalise/chat', async (req: Request, res: Response) => {
   try {
-    const { messages, currentMood, energyLevel, sleepQuality, country, stateRegion, state_region, moods, journals, medications } = req.body;
+    const { messages, currentMood, energyLevel, sleepQuality, preferred_name, preferredName, country, stateRegion, state_region, moods, journals, medications } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'Messages array is required.' });
@@ -137,9 +137,10 @@ app.post('/api/kalise/chat', async (req: Request, res: Response) => {
       }
 
       const reg = stateRegion || state_region;
+      const namePart = preferred_name || preferredName || 'Friend';
       if (country) {
         const locStr = `${reg ? reg + ', ' : ''}${country}`;
-        contextualPrompt += `[User Location: ${locStr}] `;
+        contextualPrompt += `[User: ${namePart} | Location: ${locStr}] `;
       }
 
       if (relevantPatterns.length > 0) {

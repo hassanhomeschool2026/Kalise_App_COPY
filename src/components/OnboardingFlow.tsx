@@ -33,7 +33,7 @@ const INTENTS = [
 
 export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [displayName, setDisplayName] = useState(user?.user_metadata?.preferred_name || user?.email?.split('@')[0] || '');
+  const [preferredName, setPreferredName] = useState(user?.user_metadata?.preferred_name || user?.email?.split('@')[0] || '');
   const [selectedCountry, setSelectedCountry] = useState('United States');
   const [selectedState, setSelectedState] = useState('');
   const [selectedIntent, setSelectedIntent] = useState('Relationship Clarity');
@@ -49,7 +49,7 @@ export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
   const playWelcomeAudio = async () => {
     try {
       setIsPlayingWelcome(true);
-      const welcomeText = `Welcome to your sanctuary, ${displayName || 'friend'}. I'm Kalise. I'm here for honest reflection, grounded support, and a safe space to talk through whatever is on your mind.`;
+      const welcomeText = "Hey there, I'm Kalise. Whatever you're carrying today—big or small—I'm right here with you. Let's take a breath.";
       const res = await fetch('/api/audio/speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,27 +75,19 @@ export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
     setIsSaving(true);
     try {
       if (user) {
-        const payload = {
-          id: user.id,
-          user_id: user.id,
-          app_id: 'kalise',
-          preferred_name: displayName.trim() || 'Friend',
-          display_name: displayName.trim() || 'Friend',
-          country: selectedCountry || 'United States',
-          state_region: selectedState || null,
-          primary_intent: selectedIntent,
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        };
-
-        await supabase.from('kalise_profiles').upsert(payload, { onConflict: 'id' });
-        await supabase.from('kalise_preferences').upsert({
-          user_id: user.id,
-          app_id: 'kalise',
-          onboarding_completed: true,
-          onboarding_goals: [selectedIntent],
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+        const finalName = preferredName.trim() || user.email?.split('@')[0] || 'Friend';
+        await supabase
+          .from('kalise_profiles')
+          .upsert({
+            id: user.id,
+            app_id: 'kalise',
+            preferred_name: finalName,
+            country: selectedCountry || 'United States',
+            state_region: selectedState || null,
+            primary_intent: selectedIntent,
+            onboarding_completed: true,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
       }
     } catch (err) {
       console.error('Error saving onboarding profile:', err);
@@ -161,8 +153,8 @@ export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
               </label>
               <input
                 type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                value={preferredName}
+                onChange={(e) => setPreferredName(e.target.value)}
                 placeholder="Enter your name or nickname..."
                 className="w-full px-4 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 focus:outline-none focus:border-teal-500 transition text-sm shadow-inner"
               />
@@ -170,7 +162,7 @@ export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
           </div>
         )}
 
-        {/* STEP 2: LOCATION & JURISDICTION */}
+        {/* STEP 2: JURISDICTION & REGIONAL SUPPORT */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="space-y-2">
@@ -181,7 +173,7 @@ export const OnboardingFlow: React.FC<Props> = ({ user, onComplete }) => {
                 Where are you based?
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Helps Kalise tailor accurate local resources, tenant/legal procedures, and crisis helplines.
+                Helps Kalise tailor accurate local resources, tenant rights, and crisis support lines.
               </p>
             </div>
 
